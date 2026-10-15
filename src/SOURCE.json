@@ -1,0 +1,48 @@
+{
+  "upstream_commit": "3c18f8dfffbe9a0ac0f95533a0e971cc3687be51",
+  "files": {
+    "constraints.py": {
+      "sha256": "b6faa0ad66e063e06603aa75e9780f67c4518edbba7a24f8723dc39fdc65bc43",
+      "symbols": [
+        "clipped_cost",
+        "LagrangianController"
+      ]
+    },
+    "flipcon.py": {
+      "sha256": "6658769eef936200f557272948e3c7d3c7bf7171907be9bd4d04669195a54875",
+      "symbols": [
+        "MODES",
+        "COUNTING",
+        "ADAPTIVE",
+        "PULL",
+        "split_anchors",
+        "n_replay_groups",
+        "replace_groups",
+        "robust_flags",
+        "raw_flags",
+        "FlipController",
+        "default_eps"
+      ]
+    },
+    "train.py": {
+      "sha256": "a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c",
+      "symbols": [
+        "decoupled_advantages"
+      ]
+    },
+    "common.py": {
+      "sha256": "a4950e6ca79368f1f741ccc3c3c918272754c80751afd59452764a97badf68b3",
+      "symbols": [
+        "SYSTEM_PROMPT",
+        "gold_answer",
+        "chat_messages",
+        "last_boxed",
+        "_normalize",
+        "_as_number",
+        "is_correct"
+      ]
+    }
+  },
+  "core_sha256": "c5691fe4c62585df5573c6af26f1448fa6d40cdeb64fde87c7dbe2233a98111e",
+  "core_line_endings": "LF; symbols identical to upstream AST"
+}

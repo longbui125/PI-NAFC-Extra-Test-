@@ -1,0 +1,2 @@
+# Preserve checkpoint fingerprints across Windows and Linux checkouts.
+* -text whitespace=cr-at-eol

@@ -1,0 +1,16 @@
+__pycache__/
+.pytest_cache/
+.test-tmp/
+hf_cache/
+outputs*/
+*.py[cod]
+*.tmp
+*.log
+*.zip
+!/snapshots/*.zip
+.env
+.env.*
+*.conf
+*.pem
+*.key
+.vscode/
