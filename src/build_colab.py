@@ -57,6 +57,9 @@ def frozen_sources(config, identity):
 
 
 def build(profile='phi'):
+    if profile == 'gemma':
+        from build_gemma_ngoc import build as build_matched_gemma
+        return build_matched_gemma()
     archive, meta, records, origins = load_progress(profile)
     config = meta['identity']['config']
     gemma = profile == 'gemma'

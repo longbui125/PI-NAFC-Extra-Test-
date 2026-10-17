@@ -1,0 +1,14 @@
+{
+  "archive": "nafc_gemma_math_3seeds_output.zip",
+  "sha256": "c7b038d76e6e7077e5e0feedec8f84043b36ff4cee9e983263d2dd85fc30dffc",
+  "validation_questions": 64,
+  "tested_anchor_candidates": 336,
+  "stable_anchors": 128,
+  "anchor_noise_checks_completed": 3,
+  "reference_test_questions": 208,
+  "reference_test_draws": 8,
+  "response_cap": 2048,
+  "training_started": false,
+  "reuse_in_matched_run": false,
+  "reason": "Historical Gemma MATH output at 2048 tokens. The corrected experiment keeps Olympic NuminaMath-to-Omni-MATH data and matches Ngoc's 1536-token vLLM/BF16 configuration. Preserve this ZIP; do not pool it with the new run."
+}

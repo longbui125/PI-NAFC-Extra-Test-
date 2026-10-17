@@ -251,7 +251,7 @@ def test_midpoint_tests_preserve_training_and_resume_exact_weights(tmp_path, mon
     assert not (folder/'step_2_long_omni_test.json').exists()
 
 
-@pytest.mark.parametrize('profile,expected_questions', [('gemma', 16), ('phi', 32)])
+@pytest.mark.parametrize('profile,expected_questions', [('phi', 32)])
 def test_two_notebooks_preserve_saved_sources_and_embed_valid_progress(profile, expected_questions):
     import ast, base64, hashlib, json, zipfile
     import nbformat
@@ -296,7 +296,7 @@ def extracted_notebook(profile, tmp_path):
     return book, root, namespace['EMBEDDED_PROGRESS']
 
 
-@pytest.mark.parametrize('profile,expected_questions', [('gemma', 16), ('phi', 32)])
+@pytest.mark.parametrize('profile,expected_questions', [('phi', 32)])
 def test_embedded_restore_is_automatic_and_preserves_newer_local_progress(tmp_path, monkeypatch, profile, expected_questions):
     import importlib.metadata, os, subprocess, types
     import huggingface_hub
@@ -380,7 +380,7 @@ def test_builder_refuses_to_discard_different_phi_progress(tmp_path, monkeypatch
 def test_both_models_run_all_three_paired_seeds_and_keep_inconclusive_diagnostic(tmp_path):
     import nbformat
     from build_colab import build
-    for profile in ('gemma','phi'):
+    for profile in ('phi',):
         book=nbformat.read(build(profile),as_version=4)
         prep=next(c.source for c in book.cells if c.cell_type=='code' and 'command("prepare")' in c.source)
         train=next(c.source for c in book.cells if c.cell_type=='code' and 'for seed in ASSIGNED_SEEDS:' in c.source)
