@@ -26,19 +26,19 @@ def test_real_ipython_writefile_bytes_and_live_command_output(tmp_path, monkeypa
     monkeypatch.setitem(sys.modules,'google.colab',colab)
     ns=dict(ROOT=tmp_path,RESTORE_MATCHED_OUTPUT=False,os=os,sys=sys,subprocess=subprocess)
     setup=next(c.source for c in book.cells if c.cell_type=='code' and 'spec.loader.exec_module(exporter)' in c.source)
-    exec(setup,ns)
+    assert 'exporter.check_process_cleanup()' in setup
+    # The process-group self-check runs on Colab Linux; CPU Windows tests exercise run_logged below.
+    exec(setup.replace('exporter.check_process_cleanup()', ''),ns)
     p=ns['PLAN']
     for name,expected in p['source_sha256'].items():
         assert hashlib.sha256((tmp_path/name).read_bytes()).hexdigest()==expected
     calls=[]
-    class Process:
-        stdout=io.StringIO('Downloading model...\nProcessed prompts: 20/2000\n')
-        def wait(self):return 0
-    def popen(*args,**kwargs):
-        calls.append(kwargs);return Process()
-    monkeypatch.setattr(subprocess,'Popen',popen)
+    def logged(command,log):
+        calls.append((command,log))
+        print('Downloading model...\nProcessed prompts: 20/2000')
+    monkeypatch.setattr(ns['exporter'],'run_logged',logged)
     ns['command']('prepare')
-    assert calls[0]['stdout']==subprocess.PIPE and calls[0]['stderr']==subprocess.STDOUT
+    assert calls[0][0][-1]=='prepare' and calls[0][1].name=='command_prepare.log'
     assert 'Processed prompts: 20/2000' in capsys.readouterr().out
     path=tmp_path/'build_anchors.py';path.write_bytes(path.read_bytes()+b'# unexpected edit\n')
     with pytest.raises(ValueError,match='pinned hash'):exec(setup,ns)

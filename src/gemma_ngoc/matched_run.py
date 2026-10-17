@@ -1,5 +1,6 @@
 """Run Ngoc's unchanged PI scripts with Gemma; keep caches outside exported output."""
 import argparse
+import codecs
 import hashlib
 import importlib.metadata
 import json
@@ -10,6 +11,8 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
+import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
@@ -17,6 +20,10 @@ MODEL = ROOT.parent/'gemma_ngoc_model'
 ARMS = ('mon', 'rep', 'fix', 'kl', 'fg')
 EXPORT_DIRS = ('runs', 'results', 'logs')
 MANIFEST = 'MATCHED_RUN.json'
+LEGACY_RUNNER_SHA256 = '07c9d339796b7a7302c806bd79678fc8755a5069e4c8822dd1bb8f5126d21261'
+SILENCE_LIMIT = 15 * 60
+HEARTBEAT_INTERVAL = 60
+POLL_INTERVAL = 0.25
 
 
 def read(path):
@@ -37,6 +44,12 @@ def check_sources():
         if hashlib.sha256((ROOT/name).read_bytes()).hexdigest() != expected:
             raise ValueError('Upstream source changed: '+name)
     return plan
+
+
+def same_experiment(saved, current):
+    legacy = {**current, 'source_sha256': {**current['source_sha256'],
+                                         'matched_run.py': LEGACY_RUNNER_SHA256}}
+    return saved == current or saved == legacy
 
 
 def run_name(arm, seed):
@@ -65,28 +78,96 @@ def train_args(arm, seed):
             '--output_dir', f'runs/{name}', '--seed', str(seed), '--merged_dir', str(ROOT.parent/'merged'/name)]
 
 
-def execute(script, args, log):
-    log = ROOT/'logs'/log
-    log.parent.mkdir(exist_ok=True)
-    entry = [str(ROOT/'run_upstream.py'), script] if script != 'matched_run.py' else [str(ROOT/script)]
-    command = [sys.executable, '-u', *entry, *map(str, args)]
-    with log.open('a', encoding='utf-8') as stream:
-        process = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   text=True, bufsize=1, start_new_session=True)
+def descendant_sessions(parent):
+    rows = [tuple(map(int, line.split())) for line in subprocess.check_output(
+        ['ps', '-eo', 'pid=,ppid=,pgid=,sid='], text=True).splitlines() if line.strip()]
+    descendants = {parent}
+    while children := {pid for pid, ppid, group, session in rows
+                       if ppid in descendants and pid not in descendants}:
+        descendants.update(children)
+    return {pid for pid, ppid, group, session in rows if pid in descendants and pid == group == session}
+
+
+def run_logged(command, log):
+    log = Path(log)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    started = last_output = last_heartbeat = time.monotonic()
+    decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+    # A vLLM orphan can hold a pipe open after its parent exits; regular files have no EOF wait.
+    with log.open('ab', buffering=0) as stream, log.open('rb') as reader:
+        reader.seek(0, os.SEEK_END)
+        process = subprocess.Popen(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
+                                   start_new_session=True)
+        print(f'[start] {log.name}: pid={process.pid}', flush=True)
         try:
-            for line in process.stdout:
-                print(line, end='', flush=True)
-                stream.write(line); stream.flush()
-            code = process.wait()
-            if code:
-                raise RuntimeError(f'{script} failed ({code}); see {log}.')
+            while True:
+                chunk = reader.read(65536)
+                now = time.monotonic()
+                if chunk:
+                    print(decoder.decode(chunk), end='', flush=True)
+                    last_output = now
+                if process.poll() is not None:
+                    break
+                if now - last_output >= SILENCE_LIMIT:
+                    raise TimeoutError(f'No new output for {SILENCE_LIMIT:g}s; stopped {log.name}. '
+                                       f'Completed output/checkpoints are preserved. Inspect {log}.')
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                    print(f'[running] {log.name}: {now-started:.0f}s elapsed; '
+                          f'{now-last_output:.0f}s since output; pid={process.pid}', flush=True)
+                    last_heartbeat = now
+                time.sleep(POLL_INTERVAL)
         finally:
             # vLLM workers belong to this child session; never kill unrelated notebook processes.
+            groups = {process.pid}
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
+                if process.poll() is None and os.name == 'posix':
+                    groups.update(descendant_sessions(process.pid))
+            finally:
+                for group in sorted(groups, reverse=True):
+                    try:
+                        os.killpg(group, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                process.wait(timeout=10)
+            remaining = os.fstat(reader.fileno()).st_size - reader.tell()
+            while remaining > 0 and (chunk := reader.read(min(65536, remaining))):
+                print(decoder.decode(chunk), end='', flush=True)
+                remaining -= len(chunk)
+            print(decoder.decode(b'', final=True), end='', flush=True)
+        if process.returncode:
+            raise RuntimeError(f'Command failed ({process.returncode}); see {log}.')
+        print(f'[done] {log.name}: {time.monotonic()-started:.1f}s', flush=True)
+
+
+def execute(script, args, log):
+    entry = [str(ROOT/'run_upstream.py'), script] if script != 'matched_run.py' else [str(ROOT/script)]
+    run_logged([sys.executable, '-u', *entry, *map(str, args)], ROOT/'logs'/log)
+
+
+def check_process_cleanup():
+    with tempfile.TemporaryDirectory(prefix='nafc_process_check_') as folder:
+        folder = Path(folder)
+        code = ('import os,subprocess,sys; '
+                'p=subprocess.Popen([sys.executable,"-c","import time; time.sleep(30)"]); '
+                'print(p.pid,flush=True); os._exit(0)')
+        started = time.monotonic()
+        run_logged([sys.executable, '-u', '-c', code], folder/'orphan.log')
+        if time.monotonic() - started >= 10:
+            raise RuntimeError('Process cleanup self-check took too long; do not start GPU work.')
+        worker = int((folder/'orphan.log').read_text().strip())
+        status = Path(f'/proc/{worker}/stat')
+        deadline = time.monotonic() + 2
+        while status.exists():
+            try:
+                state = status.read_text().rsplit(')', 1)[1].split()[0]
+            except FileNotFoundError:
+                break
+            if state in ('Z', 'X'):
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Worker survived process cleanup; do not start GPU work.')
+            time.sleep(.05)
+    print('[self-check] Orphan holding stdout was cleaned up without waiting for EOF.', flush=True)
 
 
 def initialize():
@@ -100,8 +181,10 @@ def initialize():
     versions = {name: importlib.metadata.version(name) for name in (*p['versions'], 'math-verify', 'datasets')}
     current = {'plan': p, 'software': versions, 'gpu': torch.cuda.get_device_name(0)}
     target = ROOT/'experiment_identity.json'
-    if target.exists() and read(target) != current:
-        raise ValueError('Saved output belongs to a different model, configuration or environment.')
+    if target.exists():
+        saved = read(target)
+        if not same_experiment(saved.get('plan'), p) or {**saved, 'plan': p} != current:
+            raise ValueError('Saved output belongs to a different model, configuration or environment.')
     write(target, current)
     from huggingface_hub import snapshot_download
     snapshot_download(p['model'], revision=p['model_revision'], local_dir=MODEL,
@@ -268,12 +351,17 @@ def restore(archive):
     with zipfile.ZipFile(archive) as bundle:
         if len(bundle.namelist()) != len(set(bundle.namelist())) or bundle.testzip() is not None:
             raise ValueError('Duplicate or damaged output archive.')
-        if read_zip_plan(bundle) != p:
+        saved_plan = read_zip_plan(bundle)
+        if not same_experiment(saved_plan, p):
             raise ValueError('Different experiment: the historical 2048-token output cannot resume this run.')
         if sum(info.file_size for info in bundle.infolist()) > shutil.disk_usage(ROOT).free:
             raise OSError('Not enough space to restore the output archive.')
         for info in bundle.infolist():
             if info.filename == MANIFEST:
+                continue
+            if info.filename == 'plan.json':
+                if json.loads(bundle.read(info)) != saved_plan:
+                    raise ValueError('Archive plan differs from its manifest.')
                 continue
             name = PurePosixPath(info.filename)
             if (info.orig_filename != info.filename or name.is_absolute() or '..' in name.parts
@@ -289,7 +377,7 @@ def restore(archive):
             if target.exists() and target.read_bytes() != bundle.read(info):
                 raise ValueError('Existing progress differs; restore into a fresh runtime.')
         for info in bundle.infolist():
-            if info.filename == MANIFEST or info.is_dir():
+            if info.filename in (MANIFEST, 'plan.json') or info.is_dir():
                 continue
             target = ROOT/info.filename
             if target.exists():

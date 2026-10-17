@@ -101,6 +101,7 @@ spec = importlib.util.spec_from_file_location("gemma_matched_export", ROOT/"matc
 exporter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(exporter)
 PLAN = exporter.check_sources()
+exporter.check_process_cleanup()
 if RESTORE_MATCHED_OUTPUT:
     uploads = files.upload()
     if len(uploads) != 1:
@@ -112,24 +113,9 @@ if RESTORE_MATCHED_OUTPUT:
     del uploads, data
 
 def command(*args):
-    import signal
     print("Starting:", *args, flush=True)
-    process = subprocess.Popen([sys.executable, "-u", str(ROOT/"matched_run.py"), *map(str, args)],
-                               cwd=ROOT, start_new_session=True, stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, text=True, bufsize=1)
-    try:
-        for line in process.stdout:
-            print(line, end="", flush=True)
-        if process.wait():
-            raise RuntimeError("Command failed; inspect the original traceback and logs above.")
-    except BaseException:
-        if process.poll() is None:
-            os.killpg(process.pid, signal.SIGINT)
-            try:
-                process.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL); process.wait()
-        raise
+    exporter.run_logged([sys.executable, "-u", str(ROOT/"matched_run.py"), *map(str, args)],
+                        ROOT/"logs"/("command_"+"_".join(map(str,args)).replace("--", "")+".log"))
 
 print("Matched plan: five arms x three seeds; 300 steps; 1,536-token cap; PI budget 358.")
 '''), md('''## 5. Prepare once
@@ -137,6 +123,11 @@ print("Matched plan: five arms x three seeds; 300 steps; 1,536-token cap; PI bud
 Completed upstream preparation files are reused. An interrupted upstream generation command may need to restart
 that command; there is no per-16-question HF resume in the unchanged vLLM scripts. Insufficient stable anchors stop
 the experiment; the declared pool or anchor count is never adjusted automatically.
+
+The runner follows the parent process, not pipe EOF. Finished stages kill only their own process group. It prints
+a heartbeat every minute and aborts a stage after 15 minutes without new output, preserving completed files and
+checkpoints. This guard can also stop a legitimate long silent operation; inspect the log rather than bypassing it.
+Output ZIPs from the previous matched Olympic notebook remain compatible; other experiment changes are rejected.
 '''), code('command("prepare")'), md('''## 6. Run all prespecified arms and seeds
 
 The scripts keep full checkpoints every 25 steps, retain the last three full checkpoints, and preserve milestone

@@ -58,3 +58,27 @@ Ngoc's unchanged preparation scripts save completed stages, not every 16-questio
 The full experiment has 15 training runs. No claim is made that it fits one Colab session or a specified CU budget. All planned seeds and milestones must be reported. Qwen-specific empirical variance constants and numerical success thresholds are not reused for Gemma; descriptive question-bootstrap comparisons are explicitly conditional on each seed. The report uses upstream fixflip definitions rather than selecting favorable runs.
 
 Only Gemma is changed. Phi's notebook and saved preparation remain as before. GPU compatibility and speed still require a real A100 execution.
+
+## Process supervision fix (18 October 2026)
+
+The old runner waited for pipe EOF before checking the upstream process status. An orphan vLLM worker could keep
+that pipe open after its parent exited, blocking the next stage indefinitely. The updated runner redirects output
+to a regular log file, polls the parent status, and cleans up the job's process group immediately after exit. On
+interruption or timeout it also collects descendant sessions before stopping them, so nested jobs are not left
+running. It prints a heartbeat every minute and stops a stage after 15 minutes without new output. That silence
+limit can stop legitimate long silent work; completed files and checkpoints are preserved for inspection/resume.
+
+Setup performs a CPU-only Linux check with a synthetic worker holding stdout after parent exit, before any model
+preparation/training. This check does not download a model or perform an optimizer update. It cannot guarantee
+against unrelated CUDA, driver, resource, or platform failures.
+
+ZIPs and identities from the previous matched Olympic runner are accepted only when all experiment settings,
+data hashes, upstream source hashes and recorded software/GPU still match. The sole permitted source difference
+is the known previous runner hash. Historical MATH/2,048-token output remains incompatible.
+
+For an already-running old notebook, upload `src/colab_process_guard.py` into `/content` and run
+`python -u /content/colab_process_guard.py` in the Colab Terminal. Keep that terminal command running. It watches
+only child sessions owned by `/content/gemma_ngoc/matched_run.py`, releases orphan groups after their leaders exit,
+and stops owned jobs after 15 minutes without log progress. It never deletes output. There is no need to interrupt
+an active evaluation just to start the helper. The helper exits after 60 seconds without any Gemma job; restart it
+if using the old notebook again later. It does not modify the old notebook or its experiment fingerprints.
