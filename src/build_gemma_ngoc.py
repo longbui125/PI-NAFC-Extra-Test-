@@ -1,4 +1,4 @@
-"""Build only the Gemma notebook using the pinned, unchanged Ngoc scripts."""
+"""Build standalone Gemma and Phi notebooks using the same matched PI protocol."""
 import hashlib
 import json
 from pathlib import Path
@@ -7,12 +7,39 @@ import nbformat as nb
 ROOT = Path(__file__).resolve().parent
 
 
-def build():
+def build(profile='gemma'):
+    if profile not in ('gemma', 'phi'):
+        raise ValueError('Choose gemma or phi.')
     source = ROOT/'gemma_ngoc'
     plan = json.loads((source/'plan.json').read_text(encoding='utf-8'))
+    bodies = {name: (source/name).read_bytes() for name in plan['source_sha256']}
     for name, expected in plan['source_sha256'].items():
-        if hashlib.sha256((source/name).read_bytes()).hexdigest() != expected:
+        if hashlib.sha256(bodies[name]).hexdigest() != expected:
             raise ValueError('Pinned source changed: '+name)
+    if profile == 'phi':
+        plan['model'] = 'microsoft/Phi-4-mini-instruct'
+        plan['model_revision'] = 'cfbefacb99257ffa30c83adab238a50856ac3083'
+        bodies['matched_run.py'] = bodies['matched_run.py'].decode('utf-8').replace('gemma', 'phi').replace('Gemma', 'Phi').encode('utf-8')
+        bodies['matched_run.py'] = bodies['matched_run.py'].replace(
+            b'Historical 2048-token HF output is excluded.', b'Gemma output and historical 4096-token Phi output are excluded.').replace(
+            b'the historical 2048-token output cannot resume this run.', b'model, data or configuration does not match this Phi run.')
+        train = bodies['train.py'].decode('utf-8')
+        train = train.replace('    config = GRPOConfig(', '''    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+    prompt_messages = list(ds["prompt"]) + ([chat_messages(q) for q in anchors.questions] if anchors else [])
+    prompt_limit = max(len(tokenizer.apply_chat_template(m, tokenize=True, add_generation_prompt=True))
+                       for m in prompt_messages)
+    context_limit = prompt_limit + args.max_completion_length
+    print(f"vLLM context: {prompt_limit} prompt + {args.max_completion_length} completion = {context_limit}", flush=True)
+    config = GRPOConfig(''', 1).replace(
+            '        vllm_mode="colocate",', '        vllm_mode="colocate",\n        vllm_max_model_length=context_limit,', 1).replace(
+            'processing_class=AutoTokenizer.from_pretrained(args.model, padding_side="left"),',
+            'processing_class=tokenizer,', 1)
+        bodies['train.py'] = train.encode('utf-8')
+        plan['vllm_training_context'] = 'Longest tokenized task/anchor prompt plus completion cap; no truncation.'
+        plan['source_line_endings'] = 'LF; shared matched scripts; Phi train also sizes vLLM context to actual prompts without truncation.'
+        for name in ('matched_run.py', 'train.py'):
+            plan['source_sha256'][name] = hashlib.sha256(bodies[name]).hexdigest()
+    bodies['plan.json'] = (json.dumps(plan, ensure_ascii=False, indent=2)+'\n').encode('utf-8')
     md, code = nb.v4.new_markdown_cell, nb.v4.new_code_cell
     cells = [md('''# Gemma / Olympic mathematics: Ngoc-matched PI configuration
 
@@ -88,7 +115,7 @@ subprocess.run([sys.executable, "-c", "import torch,vllm,trl,transformers,peft; 
 '''), md('## 3. Embedded upstream code and matched plan')]
     names = [*plan['source_sha256'], 'plan.json']
     for name in names:
-        body = (source/name).read_bytes().decode('utf-8')
+        body = bodies[name].decode('utf-8')
         cells += [md(f'### `{name}`'), code(f'%%writefile /content/gemma_ngoc/{name}\n'+body)]
     cells += [md('''## 4. Verify sources and restore only matching output
 
@@ -176,10 +203,46 @@ button.on_click(download_output)
 display(button, status)
 ''')]
     name = '01_Gemma_Olympiad_3Seeds.ipynb'
+    if profile == 'phi':
+        name = '02_Phi_Olympiad_3Seeds_Resume.ipynb'
+        for cell in cells:
+            if cell.cell_type == 'code' and cell.source.startswith('%%writefile'):
+                header, body = cell.source.split('\n', 1)
+                cell.source = header.replace('/gemma_ngoc/', '/phi_ngoc/')+'\n'+body
+            else:
+                cell.source = cell.source.replace('Gemma 3-1B-IT', 'Phi-4-mini-instruct').replace('Gemma', 'Phi').replace('gemma', 'phi')
+        cells[0].source = cells[0].source.replace(
+            'Select **A100**, fill the Hugging Face token below, then **Run all**.',
+            'Select **A100**, then **Run all**. Phi is public; no token or login is required.')
+        cells[0].source = cells[0].source.replace(
+            'This resource adjustment follows the observed shortage of 66/128 in the initial pool; it is not an identical',
+            'The extension policy follows the earlier Gemma shortage; it is declared before Phi sampling, not an identical')
+        cells[0].source = cells[0].source.replace(
+            'processor path for text-only Phi. This changes input initialization, not the learning algorithm. Six upstream',
+            'processor path for text-only Phi. Training sizes vLLM context to the longest task/anchor prompt plus 1,536\n'
+            'completion tokens, with no prompt truncation; it does not reserve the native 131,072-token window. Six upstream')
+        start = cells[0].source.index('The old output contains')
+        end = cells[0].source.index('Select **A100**', start)
+        cells[0].source = cells[0].source[:start]+'''Only question lists and dataset partitions are shared with Gemma. Phi generates its own bucket samples,
+base responses, anchors, token IDs and noise calibration. Neither Gemma output ZIPs nor historical 4,096-token
+Phi ZIPs can resume this new 1,536-token protocol. The optional restore accepts only output from this notebook.
+
+'''+cells[0].source[end:]
+        cells[1].source = '## 1. Access and optional resume'
+        cells[2].source = '''import os
+RESTORE_MATCHED_OUTPUT = False # @param {type:"boolean"}
+os.environ["USE_TF"] = "0"
+os.environ["HF_HOME"] = "/content/hf_cache"
+'''
+        for cell in cells:
+            if cell.cell_type == 'markdown':
+                cell.source = cell.source.replace(
+                    'Output ZIPs from the previous matched Olympic notebook remain compatible; other experiment changes are rejected.',
+                    'Only output ZIPs from this matched Phi notebook can resume; Gemma and legacy Phi output are rejected.')
     book = nb.v4.new_notebook(cells=cells, metadata={
         'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
         'language_info': {'name': 'python'}, 'accelerator': 'GPU', 'colab': {'name': name},
-        'nafc': {'profile': 'gemma_ngoc_matched', 'upstream_commit': plan['upstream_commit'],
+        'nafc': {'profile': profile+'_ngoc_matched', 'upstream_commit': plan['upstream_commit'],
                  'seeds': plan['seeds'], 'historical_output_reused': False}})
     nb.validate(book)
     target = ROOT.parent/'notebooks'/name
