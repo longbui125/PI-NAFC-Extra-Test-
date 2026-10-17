@@ -83,6 +83,11 @@ def test_new_plan_matches_ngoc_scale_and_preserves_upstream_text():
             expected=(upstream/name).read_text(encoding='utf-8')
             if name=='prepare_buckets.py':
                 expected=expected.replace('choices=["gsm8k", "math500", "math"]','choices=["gsm8k", "math500", "math", "olympic"]',1)
+            elif name=='train.py':
+                expected=expected.replace('from transformers import TrainerCallback',
+                                          'from transformers import AutoTokenizer, TrainerCallback',1)
+                expected=expected.replace('        model=args.model,',
+                    '        model=args.model,\n        processing_class=AutoTokenizer.from_pretrained(args.model, padding_side="left"),',1)
             assert (SOURCE/name).read_text(encoding='utf-8') == expected
 
 

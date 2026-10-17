@@ -43,7 +43,9 @@ This resource adjustment follows the observed shortage of 66/128 in the initial 
 800-candidate replication. Threshold, training data, test data and decoding remain fixed. Selection batches are
 cached, eligible initial results are reused, and the final selected 128 anchors receive a fresh 4-draw noise check.
 A data adapter supplies those rows; prepare_buckets adds only the Olympic dataset CLI choice.
-The other seven upstream scripts have no source-text edits. No Qwen scores, anchors, noise allowance or adapters
+Training passes a left-padded AutoTokenizer explicitly as TRL's processing_class, avoiding AutoProcessor's image
+processor path for text-only Gemma. This changes input initialization, not the learning algorithm. Six upstream
+scripts have no source-text edits. No Qwen scores, anchors, noise allowance or adapters
 are reused. Omni-MATH is a competition-mathematics numeric subset, not an exclusively IMO benchmark or a full
 official Omni-MATH score. Exact deduplication against the full Omni-MATH corpus was performed when freezing data.
 

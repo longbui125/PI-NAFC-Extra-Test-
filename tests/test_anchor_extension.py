@@ -104,22 +104,24 @@ def test_incomplete_calibration_keeps_selection_cache_and_original_anchor_file(e
     assert len(m.read(m.ROOT/'results/anchor_extension/selection.json')['scored']) == 4
 
 
-def test_real_user_zip_restores_66_anchors_without_modifying_saved_outputs(runner, monkeypatch):
+def test_real_user_zip_restores_saved_anchors_without_modifying_outputs(runner, monkeypatch):
     archive = SOURCE.parents[1]/'snapshots/nafc_gemma_ngoc_matched_output.zip'
     if not archive.exists():
         pytest.skip('User output is local and is not published.')
     runner.restore(archive)
     with zipfile.ZipFile(archive) as bundle:
+        expected_count = len(json.loads(bundle.read('anchors.json'))['items'])
         for name in ('anchors.json', 'results/base.json', 'buckets_train_B358.json'):
             assert (runner.ROOT/name).read_bytes() == bundle.read(name)
-    assert len(runner.read(runner.ROOT/'anchors.json')['items']) == 66
+    assert len(runner.read(runner.ROOT/'anchors.json')['items']) == expected_count
     bank = runner.read(runner.ROOT/'frozen_questions.json')['anchor_pool']
     assert len(bank) == 2048
     monkeypatch.syspath_prepend(str(SOURCE))
     spec = importlib.util.spec_from_file_location('real_saved_anchor_validation', SOURCE/'anchor_extension.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     monkeypatch.setattr(module, 'MODEL', '/content/gemma_ngoc_model')
-    module.validate_saved(runner.read(runner.ROOT/'anchors.json'), runner.check_sources(), bank[:800])
+    module.validate_saved(runner.read(runner.ROOT/'anchors.json'), runner.check_sources(),
+                          bank[:800] if expected_count < 128 else bank)
 
 
 @pytest.fixture
@@ -129,9 +131,9 @@ def installer(runner, monkeypatch):
     spec = importlib.util.spec_from_file_location('recovery_installer_test', source)
     m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
     monkeypatch.setattr(m, 'ROOT', runner.ROOT)
-    old = json.loads((Path(__file__).parent/'fixtures/gemma_pool800_plan.json').read_text(encoding='utf-8'))
-    for name in ('matched_run.py', 'frozen_questions.json'):
-        data = subprocess.check_output(['git', 'show', '729f5a4:src/gemma_ngoc/'+name], cwd=SOURCE.parents[1])
+    old = json.loads((Path(__file__).parent/'fixtures/gemma_pool2048_plan.json').read_text(encoding='utf-8'))
+    for name in ('matched_run.py', 'frozen_questions.json', 'anchor_extension.py', 'train.py'):
+        data = subprocess.check_output(['git', 'show', '4956834:src/gemma_ngoc/'+name], cwd=SOURCE.parents[1])
         (runner.ROOT/name).write_bytes(data)
     runner.write(runner.ROOT/'plan.json', old)
     runner.write(runner.ROOT/'experiment_identity.json', {'plan': old, 'software': {}, 'gpu': 'test'})
@@ -151,7 +153,7 @@ def test_installer_updates_only_verified_sources_and_preserves_output(installer)
     assert fixed.check_sources()['anchor_pool'] == 2048
     assert (m.ROOT/'anchors.json').read_bytes() == saved
     assert fixed.read(m.ROOT/'experiment_identity.json')['plan'] == fixed.check_sources()
-    assert fixed.read(m.ROOT/'results/anchor_extension/previous_plan.json')['anchor_pool'] == 800
+    assert fixed.read(m.ROOT/'results/anchor_extension/previous_plan.json')['anchor_pool'] == 2048
 
 
 def test_installer_rejects_active_training_and_modified_source(installer, monkeypatch):
@@ -163,3 +165,44 @@ def test_installer_rejects_active_training_and_modified_source(installer, monkey
     (m.ROOT/'common.py').write_text('unexpected edit')
     with pytest.raises(ValueError, match='Existing source was modified'):
         m.install('a'*40)
+
+
+def test_installer_archives_only_scratch_from_image_processor_failure(installer):
+    m = installer
+    folder = m.ROOT/'runs/lacPImonH_s1'; folder.mkdir(parents=True)
+    (folder/'README.md').write_text('initialization scratch')
+    (m.ROOT/'logs').mkdir(exist_ok=True)
+    (m.ROOT/'logs/train_lacPImonH_s1.log').write_text("OSError: Can't load image processor")
+    fixed = m.install('a'*40)
+    assert not folder.exists()
+    assert len(list((m.ROOT/'results/failed_initialization').glob('*/README.md'))) == 1
+    assert fixed.check_sources()['text_processing']['class'] == 'AutoTokenizer'
+
+
+def test_installer_preserves_checkpoints_even_with_image_processor_error(installer):
+    m = installer
+    folder = m.ROOT/'runs/lacPImonH_s1/checkpoint-25'; folder.mkdir(parents=True)
+    (folder/'optimizer.pt').write_bytes(b'preserve optimizer')
+    (m.ROOT/'logs').mkdir(exist_ok=True)
+    (m.ROOT/'logs/train_lacPImonH_s1.log').write_text("OSError: Can't load image processor")
+    m.install('a'*40)
+    assert (folder/'optimizer.pt').read_bytes() == b'preserve optimizer'
+
+
+def test_real_selection_cache_survives_text_processor_upgrade(runner, monkeypatch):
+    archive = SOURCE.parents[1]/'snapshots/nafc_gemma_ngoc_matched_output.zip'
+    if not archive.exists():
+        pytest.skip('User output is not published.')
+    runner.restore(archive)
+    prior = runner.read(runner.ROOT/'anchors.json')
+    (runner.ROOT/'anchors.json').unlink()
+    ident = runner.read(runner.ROOT/'experiment_identity.json')
+    runner.write(runner.ROOT/'experiment_identity.json', {**ident, 'plan': runner.check_sources()})
+    monkeypatch.syspath_prepend(str(SOURCE))
+    spec = importlib.util.spec_from_file_location('cache_migration_test', SOURCE/'anchor_extension.py')
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    monkeypatch.setattr(m, 'ROOT', runner.ROOT)
+    monkeypatch.setattr(m, 'MODEL', '/content/gemma_ngoc_model')
+    monkeypatch.setattr(m, 'check_sources', runner.check_sources)
+    m.build(lambda *a: pytest.fail('Compatible cached preparation was regenerated.'))
+    assert runner.read(runner.ROOT/'anchors.json')['items'] == prior['items']

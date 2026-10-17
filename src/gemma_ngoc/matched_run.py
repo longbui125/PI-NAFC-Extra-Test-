@@ -23,6 +23,9 @@ MANIFEST = 'MATCHED_RUN.json'
 LEGACY_RUNNER_SHA256 = '07c9d339796b7a7302c806bd79678fc8755a5069e4c8822dd1bb8f5126d21261'
 PRE_EXTENSION_RUNNER_SHA256 = '3c42527a8878dc140ba8e13a54cd0b9d03b7f7936fffab31b6d966d7777459a3'
 PRE_EXTENSION_DATA_SHA256 = 'df4844392bb3aa738a70f188b301896ee4f938790b88bb580412f10735982d9e'
+PRE_PROCESSOR_RUNNER_SHA256 = '15c67b15732fd2eba5c03059951f50ef1c892fe91ab60a7d1f0db0b67776d40e'
+PRE_PROCESSOR_EXTENSION_SHA256 = '3a756c23ed8d3bfe93c51e973d3cd9d44cde09184f1a37c3ab0e31c4b585a3ad'
+UPSTREAM_TRAIN_SHA256 = 'a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c'
 SILENCE_LIMIT = 15 * 60
 HEARTBEAT_INTERVAL = 60
 POLL_INTERVAL = 0.25
@@ -51,10 +54,16 @@ def check_sources():
 def same_experiment(saved, current):
     if saved == current:
         return True
-    legacy = {**current, 'source_sha256': {**current['source_sha256'],
-                                         'matched_run.py': LEGACY_RUNNER_SHA256}}
-    if saved == legacy:
-        return True
+    legacy = {**current, 'source_sha256': {**current['source_sha256']}}
+    legacy.pop('text_processing', None)
+    legacy['source_line_endings'] = 'LF; seven upstream scripts unchanged; prepare_buckets only adds the Olympic CLI choice'
+    legacy['source_sha256']['train.py'] = UPSTREAM_TRAIN_SHA256
+    if 'anchor_extension.py' in legacy['source_sha256']:
+        legacy['source_sha256']['anchor_extension.py'] = PRE_PROCESSOR_EXTENSION_SHA256
+    for digest in (LEGACY_RUNNER_SHA256, PRE_EXTENSION_RUNNER_SHA256, PRE_PROCESSOR_RUNNER_SHA256):
+        legacy['source_sha256']['matched_run.py'] = digest
+        if saved == legacy:
+            return True
     if 'anchor_initial_pool' not in current:
         return False
     legacy.update(anchor_pool=800,

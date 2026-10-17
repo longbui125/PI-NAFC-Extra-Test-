@@ -5,7 +5,7 @@ import statistics
 
 from build_anchors import noise_floors, norm_q, pick_anchors
 from common import chat_messages, is_correct
-from matched_run import MODEL, check_sources, read, write
+from matched_run import MODEL, check_sources, read, same_experiment, write
 
 ROOT = Path(__file__).resolve().parent
 
@@ -52,7 +52,16 @@ def build(generate):
     if cache_path.exists():
         cache = read(cache_path)
         if cache['identity'] != identity:
-            raise ValueError('Cached selection belongs to a different experiment or environment.')
+            prior = cache['identity']
+            compatible = (isinstance(prior.get('plan'), dict)
+                          and prior['plan'].get('anchor_pool') == plan['anchor_pool']
+                          and same_experiment(prior['plan'], plan)
+                          and same_experiment(prior.get('environment', {}).get('plan'), plan)
+                          and {**prior['environment'], 'plan': plan} == identity['environment'])
+            if not compatible:
+                raise ValueError('Cached selection belongs to a different experiment or environment.')
+            cache['identity'] = identity
+            write(cache_path, cache)
     else:
         cache = {'identity': identity, 'retained': [], 'initial_count': 0,
                  'initial_correct_sum': 0.0, 'scored': []}

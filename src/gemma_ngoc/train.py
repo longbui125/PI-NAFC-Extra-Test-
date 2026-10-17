@@ -230,7 +230,7 @@ def main():
 
     from datasets import Dataset
     from peft import LoraConfig
-    from transformers import TrainerCallback
+    from transformers import AutoTokenizer, TrainerCallback
     from trl import GRPOConfig, GRPOTrainer
 
     data = json.load(open(args.buckets))
@@ -339,6 +339,7 @@ def main():
 
     trainer = trainer_cls(
         model=args.model,
+        processing_class=AutoTokenizer.from_pretrained(args.model, padding_side="left"),
         reward_funcs=(make_acccon_reward_fn(ctrl, num_buckets) if args.method == "acccon"
                       else make_reward_fn(ctrl, num_buckets, args.adv_norm == "decoupled", args.topq)),
         args=config,

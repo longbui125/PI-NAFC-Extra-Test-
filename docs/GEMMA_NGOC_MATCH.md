@@ -8,7 +8,7 @@ Repository: https://github.com/HoangLeminh17/DATN-FPTU
 
 Main commit: `786291e`, merged on 16 October 2026. References are notebooks 6a/6b, 7a-7e and `results/20261016-pi-arms/run_info/`. Actual replay/KL/FlipGuard arguments are captured in `tests/fixtures/ngoc_pi_args.json`.
 
-Seven original scripts retain their source text (LF line endings): common, constraints, train, flipcon, evaluate, build_anchors and fixflip. prepare_buckets adds only `olympic` to its dataset CLI choices; its sampling and scoring code is unchanged. run_upstream supplies the frozen Olympic train/test/candidate rows. SHA-256 hashes are checked before execution. The same TRL trainer supplies the optimizer, loss, KL definition, anchor auditing, FlipGuard NLL and on-policy replay behavior.
+Six original scripts retain their source text (LF line endings): common, constraints, flipcon, evaluate, build_anchors and fixflip. prepare_buckets adds only `olympic` to its dataset CLI choices. train additionally passes an explicit left-padded AutoTokenizer to TRL's processing_class, avoiding image-processor auto-detection for the text-only Gemma model. Sampling, optimization and scoring algorithms are unchanged. run_upstream supplies the frozen Olympic train/test/candidate rows. SHA-256 hashes are checked before execution. The same TRL trainer supplies the optimizer, loss, KL definition, anchor auditing, FlipGuard NLL and on-policy replay behavior.
 
 ## Configuration
 
@@ -99,3 +99,14 @@ again with four independent responses. Initial metadata and source plan are reta
 If the full 2,048-candidate bank is still insufficient, the run stops with the complete selection cache preserved.
 It does not lower the success threshold, use train/test questions as anchors, or silently reduce the denominator.
 Updated output ZIPs require the updated notebook; do not rerun the old embedded source cells after upgrading.
+
+## Text-only Gemma trainer initialization
+
+TRL 1.13 calls AutoProcessor when processing_class is omitted. In the observed runtime this selected an image
+processor and failed before optimizer training because the text model had no preprocessor_config.json. The train
+script now supplies AutoTokenizer.from_pretrained(model, padding_side="left") explicitly. Library versions, model
+weights, train/test data, anchor selection, rewards and optimization settings do not change.
+
+The installer accepts the known previous source fingerprints and keeps completed preparation/cache compatible.
+It preserves scratch-only run directories from this specific image-processor initialization error under
+results/failed_initialization. Any model state, trainer state or checkpoint prevents this automatic relocation.
