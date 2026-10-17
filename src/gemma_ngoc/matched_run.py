@@ -26,6 +26,7 @@ PRE_EXTENSION_DATA_SHA256 = 'df4844392bb3aa738a70f188b301896ee4f938790b88bb58041
 PRE_PROCESSOR_RUNNER_SHA256 = '15c67b15732fd2eba5c03059951f50ef1c892fe91ab60a7d1f0db0b67776d40e'
 PRE_PROCESSOR_EXTENSION_SHA256 = '3a756c23ed8d3bfe93c51e973d3cd9d44cde09184f1a37c3ab0e31c4b585a3ad'
 UPSTREAM_TRAIN_SHA256 = 'a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c'
+MICRO4_RUNNER_SHA256 = '12e578c7ad518316075a1bdcadfb28327878f8e7d534a40f771f40f0d4336649'
 SILENCE_LIMIT = 15 * 60
 HEARTBEAT_INTERVAL = 60
 POLL_INTERVAL = 0.25
@@ -54,7 +55,12 @@ def check_sources():
 def same_experiment(saved, current):
     if saved == current:
         return True
+    previous = {**current, 'micro_batch': 4,
+                'source_sha256': {**current['source_sha256'], 'matched_run.py': MICRO4_RUNNER_SHA256}}
+    if saved == previous:
+        return True
     legacy = {**current, 'source_sha256': {**current['source_sha256']}}
+    legacy['micro_batch'] = 4
     legacy.pop('text_processing', None)
     legacy['source_line_endings'] = 'LF; seven upstream scripts unchanged; prepare_buckets only adds the Olympic CLI choice'
     legacy['source_sha256']['train.py'] = UPSTREAM_TRAIN_SHA256
@@ -212,6 +218,8 @@ def initialize():
         saved = read(target)
         if not same_experiment(saved.get('plan'), p) or {**saved, 'plan': p} != current:
             raise ValueError('Saved output belongs to a different model, configuration or environment.')
+        if saved['plan']['micro_batch'] != p['micro_batch'] and any((ROOT/'runs').rglob('*')):
+            raise ValueError('Use the memory recovery installer before changing an existing run micro-batch.')
         if saved['plan']['anchor_pool'] != p['anchor_pool'] and any((ROOT/'runs').rglob('*')):
             raise ValueError('Cannot extend the anchor pool after training has started.')
     write(target, current)
@@ -381,6 +389,8 @@ def restore(archive):
         saved_plan = read_zip_plan(bundle)
         if not same_experiment(saved_plan, p):
             raise ValueError('Different experiment: the historical 2048-token output cannot resume this run.')
+        if saved_plan['micro_batch'] != p['micro_batch'] and any(n.startswith('runs/') for n in bundle.namelist()):
+            raise ValueError('A different micro-batch can reuse preparation only; preserve the old run archive separately.')
         if saved_plan['anchor_pool'] != p['anchor_pool'] and any(n.startswith('runs/') for n in bundle.namelist()):
             raise ValueError('Cannot extend an anchor pool in an archive containing training progress.')
         if sum(info.file_size for info in bundle.infolist()) > shutil.disk_usage(ROOT).free:

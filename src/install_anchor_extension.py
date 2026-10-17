@@ -60,6 +60,12 @@ def install(revision):
             raise ValueError('Existing output does not match the approved pre-training Olympic experiment.')
     if old['anchor_pool'] != new['anchor_pool'] and any((ROOT/'runs').rglob('*')):
         raise ValueError('Anchor-pool changes are not allowed after training has started.')
+    protected = {'optimizer.pt', 'trainer_state.json', 'adapter_model.safetensors', 'pytorch_model.bin',
+                 'model.safetensors', 'lambda_state.json', 'flip_state.json', 'run_info.json'}
+    def saved_training_state(path):
+        return path.name.startswith('checkpoint-') or path.name in protected or path.suffix in ('.safetensors', '.pt', '.pth', '.bin')
+    if old['micro_batch'] != new['micro_batch'] and any(saved_training_state(p) for p in (ROOT/'runs').rglob('*')):
+        raise ValueError('Saved training state exists; micro-batch migration may reuse preparation only. Nothing was overwritten.')
     previous = ROOT/'results/anchor_extension/previous_plan.json'
     if not previous.exists():
         runner.write(previous, old)
@@ -77,18 +83,18 @@ def install(revision):
         if folder.name not in declared or not folder.is_dir() or not any(folder.iterdir()):
             continue
         log = ROOT/'logs'/f'train_{folder.name}.log'
-        if not log.exists() or "Can't load image processor" not in log.read_text(encoding='utf-8', errors='replace'):
+        if not log.exists():
             continue
-        protected = {'optimizer.pt', 'trainer_state.json', 'adapter_model.safetensors', 'pytorch_model.bin',
-                     'model.safetensors', 'lambda_state.json', 'flip_state.json', 'run_info.json'}
-        if any(p.name.startswith('checkpoint-') or p.name in protected or p.suffix == '.safetensors'
-               for p in folder.rglob('*')):
+        failed_log = log.read_text(encoding='utf-8', errors='replace')
+        if not any(message in failed_log for message in ("Can't load image processor", 'torch.OutOfMemoryError')):
             continue
-        backup = ROOT/'results/failed_initialization'/f'{folder.name}_{time.time_ns()}'
+        if any(saved_training_state(p) for p in folder.rglob('*')):
+            continue
+        backup = ROOT/'results/failed_runs'/f'{folder.name}_{time.time_ns()}'
         backup.parent.mkdir(parents=True, exist_ok=True)
         if not folder.resolve().is_relative_to((ROOT/'runs').resolve()):
             raise ValueError('Unexpected failed-initialization folder.')
         folder.rename(backup)
-        print(f'Preserved unstarted run metadata in {backup}.', flush=True)
+        print(f'Preserved failed-run metadata in {backup}. No saved optimizer checkpoint existed.', flush=True)
     print('Recovery installed: existing buckets, base evaluation and anchor results preserved.', flush=True)
     return runner

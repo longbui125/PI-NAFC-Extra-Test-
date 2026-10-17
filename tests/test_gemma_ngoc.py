@@ -103,6 +103,9 @@ def test_training_arguments_match_actual_ngoc_run_info(arm):
             parsed[key] = args[i+1]; i += 2
     actual = json.loads((PROJECT/'tests/fixtures/ngoc_pi_args.json').read_text(encoding='utf-8'))
     expected = dict(actual[arm if arm in actual else 'fix'])
+    # A100 memory adaptation preserves 8 x 8 responses per optimizer step.
+    assert expected['micro_batch'] == 4
+    expected['micro_batch'] = 1
     if arm in ('mon', 'rep'):
         expected.update(flip_mode='monitor' if arm == 'mon' else 'nafc_replay',
                         flip_gamma=.1, flip_eta=1.0 if arm == 'mon' else 10.0)
@@ -113,6 +116,7 @@ def test_training_arguments_match_actual_ngoc_run_info(arm):
     assert parsed['model'] == str(m.MODEL)
     assert parsed['output_dir'] == f'runs/lacPI{arm}H_s1'
     assert '--no_vllm' not in args
+    assert int(parsed['prompts_per_step'])*int(parsed['num_generations'])//int(parsed['micro_batch']) == 64
 
 
 def test_gemma_notebook_is_standalone_matched_and_has_no_old_resume_payload():

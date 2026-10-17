@@ -6,6 +6,8 @@
 Both standalone notebooks use Ngoc's PI protocol from DATN-FPTU commit `786291e`: five arms, seeds 1/2/3,
 300 steps, BF16, LoRA r32, PI budget 358 and one 1,536-token response cap. The five arms are PI monitor,
 PI + NAFC, fixed replay, KL and FlipGuard. Each model runs 15 training jobs sequentially.
+After an A100-40GB backward OOM, both use micro-batch 1 x accumulation 64; the effective 8 x 8 response batch
+is unchanged. Physical batching differs from Ngoc's 4 x 16; numerical and anchor-rotation order can differ.
 
 The same frozen 2,000 NuminaMath Olympic training questions, 2,000 numeric Omni-MATH test questions and
 2,048 disjoint anchor candidates are embedded. These are question lists, not model predictions. No ZIP upload
@@ -33,6 +35,8 @@ A Gemma output ZIP cannot resume Phi, and the notebook rejects it before importi
 Neither model reuses the other's adapters, checkpoints, scores or learned controller state.
 
 The optional restore switch accepts only a compatible output ZIP from the same matched model notebook.
+Previous micro-batch-4 preparation-only ZIPs remain valid for Gemma. Training state is not mixed across batching
+configurations. The OOM recovery installer can preserve scratch metadata and restart a failed uncheckpointed arm.
 The current filename still contains `Resume`, but a fresh Phi run does not embed or resume historical preparation.
 
 ## Output and interruptions

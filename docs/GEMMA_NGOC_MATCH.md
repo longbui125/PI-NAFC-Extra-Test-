@@ -16,7 +16,7 @@ Six original scripts retain their source text (LF line endings): common, constra
 |---|---|
 | Train / test | Original frozen 2,000 NuminaMath-1.5 Olympiad / 2,000 Omni-MATH numeric question-answer pairs |
 | Seeds / arms | 1, 2, 3; monitor, NAFC, fixed replay, KL, FlipGuard |
-| Training | 300 steps; 8 prompts x 8 responses; micro-batch 4; Dr. GRPO |
+| Training | 300 steps; 8 prompts x 8 responses; micro-batch 1 x accumulation 64; Dr. GRPO |
 | Response cap | 1,536 throughout; no extra long-cap run |
 | PI | B=358; eta=0.05; kp=4; lambda max=3, signed |
 | LoRA | r32; alpha 64; dropout 0; all linear layers |
@@ -57,7 +57,7 @@ Bucket and base-evaluation scripts save completed stages, so an interrupted stag
 
 The full experiment has 15 training runs. No claim is made that it fits one Colab session or a specified CU budget. All planned seeds and milestones must be reported. Qwen-specific empirical variance constants and numerical success thresholds are not reused for Gemma; descriptive question-bootstrap comparisons are explicitly conditional on each seed. The report uses upstream fixflip definitions rather than selecting favorable runs.
 
-Only Gemma is changed. Phi's notebook and saved preparation remain as before. GPU compatibility and speed still require a real A100 execution.
+Phi now uses the same matched protocol and question lists, with its own model-specific preparation. See COLAB.md. GPU compatibility and speed still require real A100 execution.
 
 ## Process supervision fix (18 October 2026)
 
@@ -109,9 +109,28 @@ weights, train/test data, anchor selection, rewards and optimization settings do
 
 The installer accepts the known previous source fingerprints and keeps completed preparation/cache compatible.
 It preserves scratch-only run directories from this specific image-processor initialization error under
-results/failed_initialization. Any model state, trainer state or checkpoint prevents this automatic relocation.
+results/failed_runs. Any model state, trainer state or checkpoint prevents this automatic relocation.
 
 Colab's preinstalled torchao 0.10.0 is incompatible with PEFT 0.21.1. This BF16 experiment does not use
 torchao quantization. The setup cell removes this optional package and tests LoRA injection plus a tiny CPU
 forward/backward pass before any Gemma loading. Core pinned versions and saved preparation remain unchanged.
 For an existing runtime, run the uninstall and CPU check in a new cell, then retry the training cell.
+
+
+## A100 backward-memory recovery (18 October 2026)
+
+Gemma's monitor arm ran 17/300 steps, then failed in backward: a 6 GiB allocation could not fit the remaining
+3.61 GiB on an A100-40GB. This was an OOM, not a stalled process. All arms now use micro-batch 1 with 64
+accumulation steps instead of micro-batch 4 with 16. Both retain 8 prompts x 8 responses per optimizer step,
+1,536 completion tokens, BF16, the same optimizer and the same PI/NAFC settings. Float summation order and
+NLL anchor rotation per micro-batch can differ; this is a documented hardware adaptation, not bitwise replication.
+Phi inherits the same physical batching. No allocator tweak, shorter questions, smaller response budget,
+quantization or algorithm change is introduced.
+
+The recovery installer accepts the exact previous source/configuration fingerprints for preparation reuse.
+It refuses a micro-batch migration if any saved model/optimizer/trainer state exists, leaving that state intact.
+A failed run folder containing only scratch/log metadata can be archived under results/failed_runs when its
+log proves an OOM or the earlier processor initialization error. Existing preparation is preserved byte for byte.
+The observed failure preceded checkpoint-25, so step 17 cannot be resumed; that arm restarts from the base.
+New notebooks accept old preparation-only ZIPs, but reject training-containing ZIPs from a different micro-batch.
+This CPU-checked change still needs GPU validation; it does not guarantee every subsequent arm fits 40GB.

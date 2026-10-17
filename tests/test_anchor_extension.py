@@ -175,7 +175,7 @@ def test_installer_archives_only_scratch_from_image_processor_failure(installer)
     (m.ROOT/'logs/train_lacPImonH_s1.log').write_text("OSError: Can't load image processor")
     fixed = m.install('a'*40)
     assert not folder.exists()
-    assert len(list((m.ROOT/'results/failed_initialization').glob('*/README.md'))) == 1
+    assert len(list((m.ROOT/'results/failed_runs').glob('*/README.md'))) == 1
     assert fixed.check_sources()['text_processing']['class'] == 'AutoTokenizer'
 
 
@@ -185,7 +185,8 @@ def test_installer_preserves_checkpoints_even_with_image_processor_error(install
     (folder/'optimizer.pt').write_bytes(b'preserve optimizer')
     (m.ROOT/'logs').mkdir(exist_ok=True)
     (m.ROOT/'logs/train_lacPImonH_s1.log').write_text("OSError: Can't load image processor")
-    m.install('a'*40)
+    with pytest.raises(ValueError, match='Saved training state exists'):
+        m.install('a'*40)
     assert (folder/'optimizer.pt').read_bytes() == b'preserve optimizer'
 
 

@@ -56,7 +56,7 @@ Omni-MATH evaluation. Ngoc's MATH questions are not used.
 | Response cap | 1,536 tokens throughout; no longer-cap test |
 | PI | Budget 358; eta 0.05; kp 4; signed lambda in [-3, 3] |
 | Training | TRL 1.13 + vLLM 0.19.1; BF16; 300 steps; 8 prompts x 8 generations |
-| LoRA / optimizer | r32 all linear layers; lr 1e-5; 10 warmup steps; micro-batch 4 |
+| LoRA / optimizer | r32 all linear layers; lr 1e-5; 10 warmup steps; micro-batch 1, accumulation 64 |
 | Anchors | Initial pool 800; extend to the pre-frozen 2,048 if insufficient; choose 128 at >=6/8 |
 | Split / audit | 64 repair + 64 held, split seed 0; 4 draws every 25 steps |
 | Controls | KL beta 0.04; FlipGuard gamma 0.1; fixed replay gamma 0.5, max fraction 0.5 |
@@ -64,6 +64,9 @@ Omni-MATH evaluation. Ngoc's MATH questions are not used.
 | Base reference | 8 draws, then independent 4-draw noise check, at 1,536 tokens only |
 
 The frozen train/test partitions are preserved from the Olympic experiment, not replaced with Ngoc's MATH split.
+After an observed A100-40GB backward OOM at micro-batch 4, all arms use micro-batch 1 and 64 accumulation steps.
+The effective batch remains 8 prompts x 8 responses = 64; physical batching differs from Ngoc's run.
+Floating-point accumulation order and per-micro anchor rotation can differ; bitwise equivalence is not claimed.
 The initial anchor pool is the first 800 candidates in the already frozen Numina candidate order. If it cannot
 provide 128 eligible anchors, selection extends to the remaining candidates in the pre-frozen 2,048-question bank.
 This resource adjustment follows the observed shortage of 66/128 in the initial pool; it is not an identical
@@ -166,6 +169,7 @@ The runner follows the parent process, not pipe EOF. Finished stages kill only t
 a heartbeat every minute and aborts a stage after 15 minutes without new output, preserving completed files and
 checkpoints. This guard can also stop a legitimate long silent operation; inspect the log rather than bypassing it.
 Output ZIPs from the previous matched Olympic notebook remain compatible; other experiment changes are rejected.
+Preparation from the earlier micro-batch-4 plan can be reused, but training state is not mixed across micro-batches.
 '''), code('command("prepare")'), md('''## 6. Run all prespecified arms and seeds
 
 The scripts keep full checkpoints every 25 steps, retain the last three full checkpoints, and preserve milestone
