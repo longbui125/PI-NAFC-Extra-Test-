@@ -70,6 +70,8 @@ os.environ["HF_HOME"] = "/content/hf_cache"
 Training runs in fresh subprocesses, so they import the installed versions even if the notebook kernel previously
 loaded other libraries. Math-Verify is installed without a version pin, as in Ngoc's notebook; its resolved version
 is recorded and checked on resume. Do not bypass an installation or compatibility error.
+The BF16 run does not use torchao quantization. Remove Colab's optional torchao package and verify a tiny CPU
+LoRA forward/backward pass before loading Gemma, so incompatible preinstalled quantization hooks fail early.
 '''), code('''import sys, subprocess
 from pathlib import Path
 ROOT = Path("/content/gemma_ngoc")
@@ -80,6 +82,8 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
     "--extra-index-url", "https://download.pytorch.org/whl/cu128",
     "torch==2.10.0+cu128", "vllm==0.19.1", "trl==1.13.0", "transformers==5.18.0", "peft==0.21.1",
     "math-verify"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "torchao"], check=True)
+subprocess.run([sys.executable, "-c", "import torch; from torch import nn; from peft import LoraConfig, get_peft_model; model=get_peft_model(nn.Sequential(nn.Linear(4,4)), LoraConfig(r=2,lora_alpha=2,target_modules=['0'])); model(torch.ones(1,4)).sum().backward(); assert any(p.grad is not None for p in model.parameters() if p.requires_grad); print('CPU LoRA forward/backward passed')"], check=True)
 subprocess.run([sys.executable, "-c", "import torch,vllm,trl,transformers,peft; print(torch.__version__,vllm.__version__,trl.__version__,transformers.__version__,peft.__version__); assert torch.cuda.is_available() and 'A100' in torch.cuda.get_device_name(0), 'Select A100'"], check=True)
 '''), md('## 3. Embedded upstream code and matched plan')]
     names = [*plan['source_sha256'], 'plan.json']

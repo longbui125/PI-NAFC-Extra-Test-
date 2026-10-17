@@ -110,3 +110,8 @@ weights, train/test data, anchor selection, rewards and optimization settings do
 The installer accepts the known previous source fingerprints and keeps completed preparation/cache compatible.
 It preserves scratch-only run directories from this specific image-processor initialization error under
 results/failed_initialization. Any model state, trainer state or checkpoint prevents this automatic relocation.
+
+Colab's preinstalled torchao 0.10.0 is incompatible with PEFT 0.21.1. This BF16 experiment does not use
+torchao quantization. The setup cell removes this optional package and tests LoRA injection plus a tiny CPU
+forward/backward pass before any Gemma loading. Core pinned versions and saved preparation remain unchanged.
+For an existing runtime, run the uninstall and CPU check in a new cell, then retry the training cell.

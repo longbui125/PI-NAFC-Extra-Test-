@@ -149,6 +149,24 @@ def m_arms():
     return ('mon','rep','fix','kl','fg')
 
 
+def test_install_removes_unused_torchao_then_checks_lora_before_gpu(monkeypatch, tmp_path):
+    import subprocess
+    from build_colab import build
+    book = nbformat.read(build('gemma'), as_version=4)
+    cell = next(c.source for c in book.cells if c.cell_type == 'code' and '"pip", "install"' in c.source)
+    calls = []
+    monkeypatch.setattr(subprocess, 'run', lambda command, **kw: calls.append((command, kw)))
+    exec(cell.replace('/content/gemma_ngoc', str(tmp_path/'run').replace('\\', '/'))
+             .replace('/content/nafc_archives', str(tmp_path/'archives').replace('\\', '/')), {})
+    assert len(calls) == 4 and all(kw == {'check': True} for _, kw in calls)
+    assert calls[1][0][1:] == ['-m', 'pip', 'uninstall', '-y', 'torchao']
+    smoke = calls[2][0][-1]
+    compile(smoke, 'lora_preflight', 'exec')
+    assert 'get_peft_model' in smoke and '.backward()' in smoke
+    assert 'from_pretrained' not in smoke and 'cuda' not in smoke
+    assert 'torch.cuda.is_available()' in calls[3][0][-1]
+
+
 def test_original_olympic_questions_are_preserved_and_anchors_are_disjoint(monkeypatch):
     spec=importlib.util.spec_from_file_location('gemma_input_test',SOURCE/'run_upstream.py')
     module=importlib.util.module_from_spec(spec)
