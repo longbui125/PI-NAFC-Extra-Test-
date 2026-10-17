@@ -30,15 +30,19 @@ Omni-MATH evaluation. Ngoc's MATH questions are not used.
 | PI | Budget 358; eta 0.05; kp 4; signed lambda in [-3, 3] |
 | Training | TRL 1.13 + vLLM 0.19.1; BF16; 300 steps; 8 prompts x 8 generations |
 | LoRA / optimizer | r32 all linear layers; lr 1e-5; 10 warmup steps; micro-batch 4 |
-| Anchors | Pool 800; choose 128 at >=6/8; one independent 4-draw noise check |
+| Anchors | Initial pool 800; extend to the pre-frozen 2,048 if insufficient; choose 128 at >=6/8 |
 | Split / audit | 64 repair + 64 held, split seed 0; 4 draws every 25 steps |
 | Controls | KL beta 0.04; FlipGuard gamma 0.1; fixed replay gamma 0.5, max fraction 0.5 |
 | Tests | 4 draws at steps 50, 100, 150, 200, 300, evaluation seed 1 |
 | Base reference | 8 draws, then independent 4-draw noise check, at 1,536 tokens only |
 
 The frozen train/test partitions are preserved from the Olympic experiment, not replaced with Ngoc's MATH split.
-The anchor pool is the first 800 candidates in the already frozen Numina candidate order, selected before model
-outcomes. A data adapter supplies those rows; prepare_buckets adds only the Olympic dataset CLI choice.
+The initial anchor pool is the first 800 candidates in the already frozen Numina candidate order. If it cannot
+provide 128 eligible anchors, selection extends to the remaining candidates in the pre-frozen 2,048-question bank.
+This resource adjustment follows the observed shortage of 66/128 in the initial pool; it is not an identical
+800-candidate replication. Threshold, training data, test data and decoding remain fixed. Selection batches are
+cached, eligible initial results are reused, and the final selected 128 anchors receive a fresh 4-draw noise check.
+A data adapter supplies those rows; prepare_buckets adds only the Olympic dataset CLI choice.
 The other seven upstream scripts have no source-text edits. No Qwen scores, anchors, noise allowance or adapters
 are reused. Omni-MATH is a competition-mathematics numeric subset, not an exclusively IMO benchmark or a full
 official Omni-MATH score. Exact deduplication against the full Omni-MATH corpus was performed when freezing data.
@@ -122,7 +126,8 @@ print("Matched plan: five arms x three seeds; 300 steps; 1,536-token cap; PI bud
 
 Completed upstream preparation files are reused. An interrupted upstream generation command may need to restart
 that command; there is no per-16-question HF resume in the unchanged vLLM scripts. Insufficient stable anchors stop
-the experiment; the declared pool or anchor count is never adjusted automatically.
+the experiment if the fixed maximum candidate bank is exhausted. The anchor count and success threshold are
+never lowered. Selection results are saved after each 128-candidate batch; a partial batch may need to repeat.
 
 The runner follows the parent process, not pipe EOF. Finished stages kill only their own process group. It prints
 a heartbeat every minute and aborts a stage after 15 minutes without new output, preserving completed files and

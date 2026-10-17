@@ -1,0 +1,109 @@
+{
+  "upstream_repository": "https://github.com/HoangLeminh17/DATN-FPTU",
+  "upstream_commit": "786291e",
+  "model": "google/gemma-3-1b-it",
+  "model_revision": "dcc83ea841ab6100d6b47a070329e1ba4cf78752",
+  "dataset": "olympic",
+  "train_count": 2000,
+  "test_count": 2000,
+  "max_tokens": 1536,
+  "pi_budget": 358,
+  "reference_budget": 440,
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "steps": 300,
+  "prompts_per_step": 8,
+  "num_generations": 8,
+  "micro_batch": 4,
+  "lora_r": 32,
+  "learning_rate": 1e-05,
+  "warmup_steps": 10,
+  "precision": "bfloat16",
+  "pi_eta": 0.05,
+  "pi_kp": 4.0,
+  "pi_lambda_max": 3.0,
+  "anchor_pool": 800,
+  "anchor_count": 128,
+  "anchor_split": 0.5,
+  "split_seed": 0,
+  "anchor_select_draws": 8,
+  "anchor_check_draws": 4,
+  "anchor_noise_repeats": 1,
+  "audit_every": 25,
+  "noise_margin": 0.02,
+  "nafc_eta": 10.0,
+  "replay_frac_max": 0.5,
+  "test_draws": 4,
+  "test_seed": 1,
+  "keep_steps": [
+    50,
+    100,
+    150,
+    200
+  ],
+  "test_steps": [
+    50,
+    100,
+    150,
+    200,
+    300
+  ],
+  "save_steps": 25,
+  "save_total_limit": 3,
+  "vllm_mem": 0.3,
+  "eval_vllm_mem": 0.85,
+  "beta": 0.04,
+  "flipguard_gamma": 0.1,
+  "fixed_replay_gamma": 0.5,
+  "arms": {
+    "mon": "monitor",
+    "rep": "nafc_replay",
+    "fix": "replay_fixed",
+    "kl": "monitor",
+    "fg": "flipguard"
+  },
+  "versions": {
+    "torch": "2.10.0+cu128",
+    "vllm": "0.19.1",
+    "trl": "1.13.0",
+    "transformers": "5.18.0",
+    "peft": "0.21.1"
+  },
+  "source_sha256": {
+    "build_anchors.py": "53b5174fc257dcd0452ae57a2ad68131ba5ffc4b074a989f63da516f75c3b572",
+    "common.py": "a4950e6ca79368f1f741ccc3c3c918272754c80751afd59452764a97badf68b3",
+    "constraints.py": "b6faa0ad66e063e06603aa75e9780f67c4518edbba7a24f8723dc39fdc65bc43",
+    "evaluate.py": "b0673f51f6ff6ffb82c3207e41c6389c3dff871c163e053cf850a01b82641b20",
+    "fixflip.py": "51ba99e80c1316133804a5b076c6b1da6b3be06f18c2ce6accaae1b85500abb6",
+    "flipcon.py": "6658769eef936200f557272948e3c7d3c7bf7171907be9bd4d04669195a54875",
+    "frozen_questions.json": "df4844392bb3aa738a70f188b301896ee4f938790b88bb580412f10735982d9e",
+    "matched_run.py": "07c9d339796b7a7302c806bd79678fc8755a5069e4c8822dd1bb8f5126d21261",
+    "prepare_buckets.py": "1b4c77d644b84598ddbaa8b41a6ea5ad5ba4ec3d37c1f7f414409aee5b601168",
+    "run_upstream.py": "f291e99dadaa0ccea7d25889d4b3bde76538f239070fbd2e4b781f6905a56fa9",
+    "train.py": "a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c"
+  },
+  "unpinned_dependencies_as_upstream": [
+    "math-verify"
+  ],
+  "source_line_endings": "LF; seven upstream scripts unchanged; prepare_buckets only adds the Olympic CLI choice",
+  "train_dataset": "AI-MO/NuminaMath-1.5",
+  "test_dataset": "KbsdJames/Omni-MATH",
+  "train_sources": [
+    "olympiads_ref",
+    "olympiads"
+  ],
+  "data_revisions": {
+    "numina": "1b05109f9e5c1ad06c0663519502416c30b300f8",
+    "omni": "40ba231d8f16e29ecd40e6407e2c8640145a8f62"
+  },
+  "data_split_seed": 42,
+  "data_scope": "Fixed random numeric-answer subset of Omni-MATH; not an official full-benchmark score.",
+  "anchor_pool_selection": "First 800 in the previously frozen candidate order; no model-outcome selection.",
+  "upstream_data_adaptation": {
+    "file": "prepare_buckets.py",
+    "change": "Add olympic to --dataset choices; data supplied by run_upstream.py. Training/controller/evaluation algorithms unchanged."
+  }
+}

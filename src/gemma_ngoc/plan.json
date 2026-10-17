@@ -25,7 +25,7 @@
   "pi_eta": 0.05,
   "pi_kp": 4.0,
   "pi_lambda_max": 3.0,
-  "anchor_pool": 800,
+  "anchor_pool": 2048,
   "anchor_count": 128,
   "anchor_split": 0.5,
   "split_seed": 0,
@@ -79,11 +79,12 @@
     "evaluate.py": "b0673f51f6ff6ffb82c3207e41c6389c3dff871c163e053cf850a01b82641b20",
     "fixflip.py": "51ba99e80c1316133804a5b076c6b1da6b3be06f18c2ce6accaae1b85500abb6",
     "flipcon.py": "6658769eef936200f557272948e3c7d3c7bf7171907be9bd4d04669195a54875",
-    "frozen_questions.json": "df4844392bb3aa738a70f188b301896ee4f938790b88bb580412f10735982d9e",
-    "matched_run.py": "3c42527a8878dc140ba8e13a54cd0b9d03b7f7936fffab31b6d966d7777459a3",
+    "frozen_questions.json": "6fe942bdfda17453163799bc4d4ec9d671d3b37adc4a5800bd41f05d8adbd263",
+    "matched_run.py": "15c67b15732fd2eba5c03059951f50ef1c892fe91ab60a7d1f0db0b67776d40e",
     "prepare_buckets.py": "1b4c77d644b84598ddbaa8b41a6ea5ad5ba4ec3d37c1f7f414409aee5b601168",
     "run_upstream.py": "f291e99dadaa0ccea7d25889d4b3bde76538f239070fbd2e4b781f6905a56fa9",
-    "train.py": "a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c"
+    "train.py": "a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c",
+    "anchor_extension.py": "3a756c23ed8d3bfe93c51e973d3cd9d44cde09184f1a37c3ab0e31c4b585a3ad"
   },
   "unpinned_dependencies_as_upstream": [
     "math-verify"
@@ -101,9 +102,11 @@
   },
   "data_split_seed": 42,
   "data_scope": "Fixed random numeric-answer subset of Omni-MATH; not an official full-benchmark score.",
-  "anchor_pool_selection": "First 800 in the previously frozen candidate order; no model-outcome selection.",
+  "anchor_pool_selection": "First 800 frozen candidates initially; if insufficient, evaluate all remaining candidates in the pre-frozen 2048-question bank. Selection results are cached; threshold remains 6/8.",
   "upstream_data_adaptation": {
     "file": "prepare_buckets.py",
     "change": "Add olympic to --dataset choices; data supplied by run_upstream.py. Training/controller/evaluation algorithms unchanged."
-  }
+  },
+  "anchor_initial_pool": 800,
+  "anchor_batch_size": 128
 }

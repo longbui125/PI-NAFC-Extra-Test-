@@ -1,6 +1,6 @@
 # Gemma / Olympic mathematics with Ngoc's PI configuration
 
-The user explicitly selected the exact Ngoc configuration on 17 October 2026. Configuration follows Ngoc, but the model is Gemma 3-1B-IT and data remains the previously frozen NuminaMath-to-Omni-MATH Olympic experiment. Ngoc's MATH questions are not used; settings are not tuned to Gemma outcomes.
+The user selected Ngoc's configuration on 17 October 2026. Training and decoding follow Ngoc, but the model is Gemma 3-1B-IT and data remains the frozen NuminaMath-to-Omni-MATH Olympic experiment. Following an initial shortage of 66/128 eligible anchors, the user authorized expansion within the previously frozen candidate bank. This preparation adjustment is recorded below; it is not an identical 800-candidate replication.
 
 ## Upstream reference
 
@@ -21,7 +21,7 @@ Seven original scripts retain their source text (LF line endings): common, const
 | PI | B=358; eta=0.05; kp=4; lambda max=3, signed |
 | LoRA | r32; alpha 64; dropout 0; all linear layers |
 | Optimizer | lr 1e-5; constant with 10-step warmup; BF16 |
-| Anchors | Pool 800; select 128 at >=6/8; one 4-draw recheck |
+| Anchors | Initial pool 800; fixed maximum 2,048 if insufficient; select 128 at >=6/8; one 4-draw recheck |
 | Split / audits | Half repair / half held; split seed 0; every 25 steps x 4 samples |
 | NAFC | eta 10; lambda max 1; margin 0.02 above Gemma's measured noise; max replacement fraction 0.5 |
 | Fixed replay | gamma 0.5 x max fraction 0.5 = 2/8 prompt groups; rotate through repair anchors |
@@ -33,7 +33,7 @@ Seven original scripts retain their source text (LF line endings): common, const
 
 Math-Verify was not version-pinned in Ngoc's installation cell. This notebook follows that installation and records its resolved version, together with datasets, before preparation. Resume rejects a different recorded environment.
 
-Training data retains the `olympiads_ref` and `olympiads` sources. Test data retains the numeric-answer Omni-MATH subset; it is not the full official benchmark or an exclusively IMO dataset. The exact approved 2,000 train/test partitions are unchanged. The first 800 of the already frozen 2,048 Numina anchor candidates form the candidate pool, fixed before outcomes to match Ngoc's pool size. All partitions remain disjoint, and the original freeze excluded exact overlaps against the full Omni-MATH corpus.
+Training data retains the `olympiads_ref` and `olympiads` sources. Test data retains the numeric-answer Omni-MATH subset; it is not the full official benchmark or an exclusively IMO dataset. The exact approved 2,000 train/test partitions are unchanged. The initial pool is the first 800 of the already frozen 2,048 Numina candidates. If insufficient, all remaining candidates are evaluated; selection does not stop midway through expansion as soon as 128 become available. All partitions remain disjoint, and the original freeze excluded exact overlaps against the full Omni-MATH corpus.
 
 The original train-bucket preparation also samples 2,000 x 8 responses. B=358 buckets are computed on CPU by reusing those samples. This is separate from the 2,000 x (8+4) test-reference responses. Both prepare once for all 15 runs. No new validation split or 70%-of-reference budget is introduced.
 
@@ -53,7 +53,7 @@ Those responses use a 2,048-token cap, Hugging Face generation and the old data 
 
 Fill the token cell, select A100 and Run all. A fresh run needs no file upload. A later output ZIP from this new notebook can be restored by enabling `RESTORE_MATCHED_OUTPUT`; old protocol ZIPs are rejected. The final download button also works after an interrupted command once setup has completed.
 
-Ngoc's unchanged preparation scripts save completed stages, not every 16-question chunk. Interrupted generation stages may restart. Training resumes only from a complete model/optimizer/scheduler/RNG/PI/NAFC checkpoint. No fallback to CPU, smaller counts or shorter evaluation is automatic.
+Bucket and base-evaluation scripts save completed stages, so an interrupted stage may restart. Anchor selection now saves every 128-candidate batch. Training resumes only from a complete model/optimizer/scheduler/RNG/PI/NAFC checkpoint. No fallback to CPU, smaller counts or shorter evaluation is automatic.
 
 The full experiment has 15 training runs. No claim is made that it fits one Colab session or a specified CU budget. All planned seeds and milestones must be reported. Qwen-specific empirical variance constants and numerical success thresholds are not reused for Gemma; descriptive question-bootstrap comparisons are explicitly conditional on each seed. The report uses upstream fixflip definitions rather than selecting favorable runs.
 
@@ -82,3 +82,20 @@ only child sessions owned by `/content/gemma_ngoc/matched_run.py`, releases orph
 and stops owned jobs after 15 minutes without log progress. It never deletes output. There is no need to interrupt
 an active evaluation just to start the helper. The helper exits after 60 seconds without any Gemma job; restart it
 if using the old notebook again later. It does not modify the old notebook or its experiment fingerprints.
+
+## Recovering the 66-anchor preparation
+
+`src/install_anchor_extension.py` upgrades an idle existing runtime from the two known 800-pool runners. It verifies
+all sources before writing, rejects active jobs or pool changes after training has started, and preserves bucket,
+base-evaluation and anchor files. The new frozen-data hash records the complete pre-existing candidate bank;
+train/test questions are unchanged. A saved old Olympic ZIP can also be restored into the updated notebook.
+
+The extension reuses every qualified item when the old file contains all eligible items from its initial pool.
+These items become part of the candidate set; final selection still uses the upstream seeded shuffle, so not all
+66 must appear in the final 128. Only the remaining 1,248 candidates require new selection samples. Each completed
+128-candidate batch is saved under `results/anchor_extension/selection.json`. Final selected anchors are calibrated
+again with four independent responses. Initial metadata and source plan are retained under that results folder.
+
+If the full 2,048-candidate bank is still insufficient, the run stops with the complete selection cache preserved.
+It does not lower the success threshold, use train/test questions as anchors, or silently reduce the denominator.
+Updated output ZIPs require the updated notebook; do not rerun the old embedded source cells after upgrading.

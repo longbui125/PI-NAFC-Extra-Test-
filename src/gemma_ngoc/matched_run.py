@@ -21,6 +21,8 @@ ARMS = ('mon', 'rep', 'fix', 'kl', 'fg')
 EXPORT_DIRS = ('runs', 'results', 'logs')
 MANIFEST = 'MATCHED_RUN.json'
 LEGACY_RUNNER_SHA256 = '07c9d339796b7a7302c806bd79678fc8755a5069e4c8822dd1bb8f5126d21261'
+PRE_EXTENSION_RUNNER_SHA256 = '3c42527a8878dc140ba8e13a54cd0b9d03b7f7936fffab31b6d966d7777459a3'
+PRE_EXTENSION_DATA_SHA256 = 'df4844392bb3aa738a70f188b301896ee4f938790b88bb580412f10735982d9e'
 SILENCE_LIMIT = 15 * 60
 HEARTBEAT_INTERVAL = 60
 POLL_INTERVAL = 0.25
@@ -47,9 +49,24 @@ def check_sources():
 
 
 def same_experiment(saved, current):
+    if saved == current:
+        return True
     legacy = {**current, 'source_sha256': {**current['source_sha256'],
                                          'matched_run.py': LEGACY_RUNNER_SHA256}}
-    return saved == current or saved == legacy
+    if saved == legacy:
+        return True
+    if 'anchor_initial_pool' not in current:
+        return False
+    legacy.update(anchor_pool=800,
+                  anchor_pool_selection='First 800 in the previously frozen candidate order; no model-outcome selection.')
+    legacy.pop('anchor_initial_pool'); legacy.pop('anchor_batch_size')
+    legacy['source_sha256'].pop('anchor_extension.py')
+    legacy['source_sha256']['frozen_questions.json'] = PRE_EXTENSION_DATA_SHA256
+    for digest in (LEGACY_RUNNER_SHA256, PRE_EXTENSION_RUNNER_SHA256):
+        legacy['source_sha256']['matched_run.py'] = digest
+        if saved == legacy:
+            return True
+    return False
 
 
 def run_name(arm, seed):
@@ -140,7 +157,8 @@ def run_logged(command, log):
 
 
 def execute(script, args, log):
-    entry = [str(ROOT/'run_upstream.py'), script] if script != 'matched_run.py' else [str(ROOT/script)]
+    entry = ([str(ROOT/script)] if script in ('matched_run.py', 'anchor_extension.py')
+             else [str(ROOT/'run_upstream.py'), script])
     run_logged([sys.executable, '-u', *entry, *map(str, args)], ROOT/'logs'/log)
 
 
@@ -185,6 +203,8 @@ def initialize():
         saved = read(target)
         if not same_experiment(saved.get('plan'), p) or {**saved, 'plan': p} != current:
             raise ValueError('Saved output belongs to a different model, configuration or environment.')
+        if saved['plan']['anchor_pool'] != p['anchor_pool'] and any((ROOT/'runs').rglob('*')):
+            raise ValueError('Cannot extend the anchor pool after training has started.')
     write(target, current)
     from huggingface_hub import snapshot_download
     snapshot_download(p['model'], revision=p['model_revision'], local_dir=MODEL,
@@ -210,10 +230,8 @@ def prepare():
     (ROOT/'results/texts').mkdir(parents=True, exist_ok=True)
     if not (ROOT/'results/base.json').exists():
         evaluate_model(MODEL, 'base')
-    if not (ROOT/'anchors.json').exists():
-        execute('build_anchors.py', ['--model', MODEL, '--dataset', p['dataset'], '--train_limit', 2000,
-                '--pool', p['anchor_pool'], '--n_anchor', p['anchor_count'], '--max_len', p['max_tokens'],
-                '--k_select', 8, '--k_check', 4, '--seed', 0, '--out', 'anchors.json'], 'anchors.log')
+    if not (ROOT/'anchors.json').exists() or len(read(ROOT/'anchors.json')['items']) < p['anchor_count']:
+        execute('anchor_extension.py', [], 'anchors.log')
     for name in ('buckets_train_B440.json', 'buckets_train_B358.json', 'buckets_test_B440.json'):
         d = read(ROOT/name)
         if (len(d['items']) != 2000 or d['meta']['max_len'] != 1536
@@ -354,6 +372,8 @@ def restore(archive):
         saved_plan = read_zip_plan(bundle)
         if not same_experiment(saved_plan, p):
             raise ValueError('Different experiment: the historical 2048-token output cannot resume this run.')
+        if saved_plan['anchor_pool'] != p['anchor_pool'] and any(n.startswith('runs/') for n in bundle.namelist()):
+            raise ValueError('Cannot extend an anchor pool in an archive containing training progress.')
         if sum(info.file_size for info in bundle.infolist()) > shutil.disk_usage(ROOT).free:
             raise OSError('Not enough space to restore the output archive.')
         for info in bundle.infolist():

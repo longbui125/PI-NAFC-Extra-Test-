@@ -126,8 +126,7 @@ def test_real_linux_orphan_cleanup_before_gpu_work():
 def test_restore_previous_olympic_zip_preserves_data_and_keeps_new_runner_plan(runner, tmp_path):
     m = runner
     current = m.check_sources()
-    legacy = json.loads(json.dumps(current))
-    legacy['source_sha256']['matched_run.py'] = m.LEGACY_RUNNER_SHA256
+    legacy = json.loads((Path(__file__).parent/'fixtures/gemma_pool800_plan.json').read_text(encoding='utf-8'))
     import zipfile
     archive = tmp_path.parent/'before_process_fix.zip'
     with zipfile.ZipFile(archive, 'w') as bundle:
@@ -198,8 +197,7 @@ def test_old_identity_migrates_runner_only_and_rejects_environment_changes(runne
     m = runner; p = m.check_sources()
     gpu = 'NVIDIA A100-SXM4-40GB'
     software = {**p['versions'], 'math-verify': 'test', 'datasets': 'test'}
-    legacy = json.loads(json.dumps(p))
-    legacy['source_sha256']['matched_run.py'] = m.LEGACY_RUNNER_SHA256
+    legacy = json.loads((Path(__file__).parent/'fixtures/gemma_pool800_plan.json').read_text(encoding='utf-8'))
     identity = m.ROOT/'experiment_identity.json'
     m.write(identity, {'plan': legacy, 'software': software, 'gpu': gpu})
     monkeypatch.setitem(sys.modules, 'torch', types.SimpleNamespace(cuda=types.SimpleNamespace(

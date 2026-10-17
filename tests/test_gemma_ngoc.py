@@ -71,7 +71,8 @@ def test_new_plan_matches_ngoc_scale_and_preserves_upstream_text():
     assert p['seeds'] == [1, 2, 3] and len(p['arms']) == 5
     assert (p['max_tokens'], p['pi_budget'], p['reference_budget']) == (1536, 358, 440)
     assert (p['train_count'], p['test_count'], p['steps']) == (2000, 2000, 300)
-    assert p['precision'] == 'bfloat16' and p['anchor_pool'] == 800 and p['anchor_noise_repeats'] == 1
+    assert p['precision'] == 'bfloat16' and p['anchor_pool'] == 2048 and p['anchor_noise_repeats'] == 1
+    assert p['anchor_initial_pool'] == 800 and p['anchor_batch_size'] == 128
     assert p['dataset']=='olympic' and p['train_dataset']=='AI-MO/NuminaMath-1.5' and p['test_dataset']=='KbsdJames/Omni-MATH'
     assert p['keep_steps'] == [50, 100, 150, 200] and p['test_draws'] == 4
     for name, digest in p['source_sha256'].items():
@@ -155,9 +156,9 @@ def test_original_olympic_questions_are_preserved_and_anchors_are_disjoint(monke
     pairs=lambda rows:[{k:q[k] for k in ('question','answer')} for q in rows]
     assert frozen['train']==pairs(original['task_train'])
     assert frozen['test']==pairs(original['omni_test'])
-    assert frozen['anchor_pool']==pairs(original['anchor_candidates'][:800])
+    assert frozen['anchor_pool']==pairs(original['anchor_candidates'])
     keys=[q['question'] for name in ('train','test','anchor_pool') for q in frozen[name]]
-    assert len(keys)==len(set(keys))==4800
+    assert len(keys)==len(set(keys))==6048
     calls=[];monkeypatch.setattr(module,'original_load_split',lambda *a:calls.append(a) or [])
     module.load_split('math','train',None)
     assert calls==[('math','train',None)]
@@ -173,11 +174,11 @@ def test_preparation_runs_only_one_cap_and_reuses_completed_stages(runner, monke
             m.write(target,{'items':[{}]*2000,'meta':{'model':str(m.MODEL),'max_len':1536,'dataset':'olympic'}})
         elif script=='evaluate.py':
             m.write(m.ROOT/'results/base.json',{'per_question':[]})
-        elif script=='build_anchors.py':
+        elif script=='anchor_extension.py':
             m.write(m.ROOT/'anchors.json',{'items':[{}]*128})
     monkeypatch.setattr(m,'execute',fake)
     m.prepare()
-    assert [a[0] for a in calls]==['prepare_buckets.py']*3+['evaluate.py','build_anchors.py']
+    assert [a[0] for a in calls]==['prepare_buckets.py']*3+['evaluate.py','anchor_extension.py']
     assert all('--max_len' not in a or a[a.index('--max_len')+1]==1536 for _,a in calls)
     calls.clear();m.prepare();assert not calls
     path=m.ROOT/'buckets_test_B440.json'

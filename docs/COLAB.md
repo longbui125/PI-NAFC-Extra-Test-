@@ -17,7 +17,7 @@ Select A100-SXM4-40GB and Run all. No model token is required. Phi still uses se
 
 Results remain local until downloaded. Stop the running command, wait for it to finish, run the final cell and download partial output before ending the runtime. A destroyed runtime loses undownloaded progress. The ZIP excludes model weights, cache and credentials, but includes available training checkpoints and results. Clear the token cell before sharing a saved notebook.
 
-Gemma's upstream preparation scripts reuse completed stage files, but an interrupted generation command restarts that command. Full training checkpoints are saved every 25 steps; retained milestone adapters alone cannot resume the optimizer.
+Gemma's bucket and base-evaluation scripts reuse completed stage files; an interrupted stage may restart. Anchor selection now caches every 128-candidate batch and can extend the initial pool of 800 to the already frozen maximum of 2,048 if insufficient. The 128-anchor target and >=6/8 threshold remain fixed. See the configuration document for recovery from the initial 66-anchor result. Full training checkpoints are saved every 25 steps; retained milestone adapters alone cannot resume the optimizer.
 
 ## Repository
 
