@@ -105,7 +105,7 @@ def test_training_arguments_match_actual_ngoc_run_info(arm):
     expected = dict(actual[arm if arm in actual else 'fix'])
     # A100 memory adaptation preserves 8 x 8 responses per optimizer step.
     assert expected['micro_batch'] == 4
-    expected['micro_batch'] = 1
+    expected['micro_batch'] = 2
     if arm in ('mon', 'rep'):
         expected.update(flip_mode='monitor' if arm == 'mon' else 'nafc_replay',
                         flip_gamma=.1, flip_eta=1.0 if arm == 'mon' else 10.0)
@@ -116,7 +116,7 @@ def test_training_arguments_match_actual_ngoc_run_info(arm):
     assert parsed['model'] == str(m.MODEL)
     assert parsed['output_dir'] == f'runs/lacPI{arm}H_s1'
     assert '--no_vllm' not in args
-    assert int(parsed['prompts_per_step'])*int(parsed['num_generations'])//int(parsed['micro_batch']) == 64
+    assert int(parsed['prompts_per_step'])*int(parsed['num_generations'])//int(parsed['micro_batch']) == 32
 
 
 def test_gemma_notebook_is_standalone_matched_and_has_no_old_resume_payload():
@@ -142,7 +142,8 @@ def test_gemma_notebook_is_standalone_matched_and_has_no_old_resume_payload():
     assert book.metadata.nafc.profile == 'gemma_ngoc_matched'
     assert not book.metadata.nafc.historical_output_reused
     text='\n'.join(c.source for c in book.cells if c.cell_type == 'code')
-    assert 'EMBEDDED_PROGRESS' not in text and 'drive.mount' not in text and 'userdata' not in text
+    assert 'EMBEDDED_PROGRESS' not in text and 'userdata' not in text
+    assert 'drive.mount("/content/drive")' in text
     assert 'RESTORE_MATCHED_OUTPUT = False' in text
     train=next(c.source for c in book.cells if c.cell_type=='code' and 'for seed in PLAN[' in c.source)
     calls=[];exec(train,dict(PLAN=p,command=lambda *a:calls.append(a)))
@@ -160,7 +161,7 @@ def test_install_removes_unused_torchao_then_checks_lora_before_gpu(monkeypatch,
     cell = next(c.source for c in book.cells if c.cell_type == 'code' and '"pip", "install"' in c.source)
     calls = []
     monkeypatch.setattr(subprocess, 'run', lambda command, **kw: calls.append((command, kw)))
-    exec(cell.replace('/content/gemma_ngoc', str(tmp_path/'run').replace('\\', '/'))
+    exec(cell.replace('/content/drive/MyDrive/NAFC_Gemma_Olympiad_micro2', str(tmp_path/'run').replace('\\', '/'))
              .replace('/content/nafc_archives', str(tmp_path/'archives').replace('\\', '/')), {})
     assert len(calls) == 4 and all(kw == {'check': True} for _, kw in calls)
     assert calls[1][0][1:] == ['-m', 'pip', 'uninstall', '-y', 'torchao']

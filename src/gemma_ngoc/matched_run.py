@@ -16,7 +16,7 @@ import time
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
-MODEL = ROOT.parent/'gemma_ngoc_model'
+MODEL = Path('/content/gemma_ngoc_model')
 ARMS = ('mon', 'rep', 'fix', 'kl', 'fg')
 EXPORT_DIRS = ('runs', 'results', 'logs')
 MANIFEST = 'MATCHED_RUN.json'
@@ -27,6 +27,8 @@ PRE_PROCESSOR_RUNNER_SHA256 = '15c67b15732fd2eba5c03059951f50ef1c892fe91ab60a7d1
 PRE_PROCESSOR_EXTENSION_SHA256 = '3a756c23ed8d3bfe93c51e973d3cd9d44cde09184f1a37c3ab0e31c4b585a3ad'
 UPSTREAM_TRAIN_SHA256 = 'a41a6d510d8819144d0cd29d0faa573ecb58ae25a47a9a1760cd4ffb0dac696c'
 MICRO4_RUNNER_SHA256 = '12e578c7ad518316075a1bdcadfb28327878f8e7d534a40f771f40f0d4336649'
+MICRO1_RUNNER_SHA256 = 'e38cb25fb15f35677c52684b7aa92d9b1bbc761df63b29854f52c6505c8fb791'
+PHI_MICRO1_RUNNER_SHA256 = '9230a2705d142ea65057bb3711d4e081b30c138f7c7cc81b89c8ad804656543a'
 SILENCE_LIMIT = 15 * 60
 HEARTBEAT_INTERVAL = 60
 POLL_INTERVAL = 0.25
@@ -55,10 +57,11 @@ def check_sources():
 def same_experiment(saved, current):
     if saved == current:
         return True
-    previous = {**current, 'micro_batch': 4,
-                'source_sha256': {**current['source_sha256'], 'matched_run.py': MICRO4_RUNNER_SHA256}}
-    if saved == previous:
-        return True
+    for micro, digest in ((4, MICRO4_RUNNER_SHA256), (1, MICRO1_RUNNER_SHA256), (1, PHI_MICRO1_RUNNER_SHA256)):
+        previous = {**current, 'micro_batch': micro,
+                    'source_sha256': {**current['source_sha256'], 'matched_run.py': digest}}
+        if saved == previous:
+            return True
     legacy = {**current, 'source_sha256': {**current['source_sha256']}}
     legacy['micro_batch'] = 4
     legacy.pop('text_processing', None)
@@ -107,7 +110,7 @@ def train_args(arm, seed):
             '--flip_gamma', str(p['fixed_replay_gamma'] if arm == 'fix' else p['flipguard_gamma']),
             '--flip_margin', str(p['noise_margin']), '--flip_lam_max', '1.0', '--flip_per_micro', '1',
             '--replay_frac_max', str(p['replay_frac_max']), '--beta', str(p['beta'] if arm == 'kl' else 0.0),
-            '--output_dir', f'runs/{name}', '--seed', str(seed), '--merged_dir', str(ROOT.parent/'merged'/name)]
+            '--output_dir', f'runs/{name}', '--seed', str(seed), '--merged_dir', str(MODEL.parent/'merged'/name)]
 
 
 def descendant_sessions(parent):
@@ -307,12 +310,12 @@ def train_one(arm, seed):
         if (ROOT/f'results/{key}.json').exists():
             continue
         checkpoint = folder/(f'checkpoint-{step}' if step == p['steps'] else f'keep/step-{step}')
-        merged = ROOT.parent/'merged'/key
+        merged = MODEL.parent/'merged'/key
         # Merge in a separate process, releasing CPU tensors before the vLLM evaluator starts.
         if not (merged/'config.json').exists():
             execute('matched_run.py', ['merge', '--checkpoint', checkpoint, '--merged', merged], f'merge_{key}.log')
         evaluate_model(merged, key)
-        if not merged.resolve().is_relative_to((ROOT.parent/'merged').resolve()):
+        if not merged.resolve().is_relative_to((MODEL.parent/'merged').resolve()):
             raise ValueError('Unexpected merged-model cleanup path.')
         shutil.rmtree(merged)
 

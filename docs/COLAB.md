@@ -6,8 +6,9 @@
 Both standalone notebooks use Ngoc's PI protocol from DATN-FPTU commit `786291e`: five arms, seeds 1/2/3,
 300 steps, BF16, LoRA r32, PI budget 358 and one 1,536-token response cap. The five arms are PI monitor,
 PI + NAFC, fixed replay, KL and FlipGuard. Each model runs 15 training jobs sequentially.
-After an A100-40GB backward OOM, both use micro-batch 1 x accumulation 64; the effective 8 x 8 response batch
-is unchanged. Physical batching differs from Ngoc's 4 x 16; numerical and anchor-rotation order can differ.
+After the A100-40GB OOM and the user's request to speed up the restart, Gemma uses micro-batch 2 x accumulation
+32; Phi stays at 1 x 64. Both retain the effective 8 x 8 response batch. Physical batching differs from Ngoc's
+4 x 16; numerical and anchor-rotation order can differ. Micro-batch 2 still needs real-GPU memory validation.
 
 The same frozen 2,000 NuminaMath Olympic training questions, 2,000 numeric Omni-MATH test questions and
 2,048 disjoint anchor candidates are embedded. These are question lists, not model predictions. No ZIP upload
@@ -16,8 +17,10 @@ or repository checkout is needed for a fresh run. See [protocol details](GEMMA_N
 ## Run
 
 Import the corresponding notebook into Colab and select A100. For Gemma, accept its Hugging Face license
-and fill the first token cell. Phi is public and needs no token. Leave `RESTORE_MATCHED_OUTPUT=False` for
-a fresh run, then Run all. Setup removes unused torchao and tests a tiny CPU LoRA forward/backward pass.
+and fill the first token cell. Gemma also requests permission to mount the running account's Google Drive.
+For the current Gemma restart, enable `RESTORE_MATCHED_OUTPUT` and upload the saved matched preparation-only ZIP
+when prompted; it contains 128 anchors and complete train/test/base preparation, but no trained checkpoints.
+Phi is public and needs no token. Leave `RESTORE_MATCHED_OUTPUT=False` for a genuinely fresh run, then Run all. Setup removes unused torchao and tests a tiny CPU LoRA forward/backward pass.
 Both notebooks include the text-tokenizer and process-supervision fixes. Each notebook is independent.
 
 Phi model revision is `cfbefacb99257ffa30c83adab238a50856ac3083`. Its pinned config declares Phi3ForCausalLM,
@@ -35,15 +38,29 @@ A Gemma output ZIP cannot resume Phi, and the notebook rejects it before importi
 Neither model reuses the other's adapters, checkpoints, scores or learned controller state.
 
 The optional restore switch accepts only a compatible output ZIP from the same matched model notebook.
-Previous micro-batch-4 preparation-only ZIPs remain valid for Gemma. Training state is not mixed across batching
+Previous micro-batch-1/4 preparation-only ZIPs remain valid for Gemma. Training state is not mixed across batching
 configurations. The OOM recovery installer can preserve scratch metadata and restart a failed uncheckpointed arm.
 The current filename still contains `Resume`, but a fresh Phi run does not embed or resume historical preparation.
 
 ## Output and interruptions
 
-The final button downloads all available output, including partial preparation, logs, response texts and resumable
-checkpoints. Download before ending the runtime; undownloaded output is lost when Colab destroys the runtime.
-Weights, model cache and credentials are excluded. No Drive or Secrets setup is used.
+Gemma writes experiment sources, preparation, checkpoints, evaluation results and logs directly under
+`/content/drive/MyDrive/NAFC_Gemma_Olympiad_micro2`. This is My Drive of the account authorized in the running
+Colab, not an externally shared folder. It needs sufficient free Drive storage. Model downloads stay under
+`/content/gemma_ngoc_model`, the Hugging Face cache under `/content/hf_cache`, and temporary merged models
+under `/content/merged`; they are redownloaded/rebuilt after a VM replacement and are not backed up to Drive.
+Direct Drive writes can add I/O overhead, especially at checkpoint saves.
+
+After a VM replacement, reopen this same notebook, provide the token, authorize the same Drive and Run all.
+Existing Drive preparation/results are kept; an old ZIP is not imported over existing experiment identity.
+The training loop skips completed jobs and resumes from the latest complete checkpoint. If the VM dies while
+saving a checkpoint, the runner skips incomplete checkpoints and tries earlier complete ones. It cannot recover
+steps since the last valid save. Pinned software/GPU and experiment identity still must match; unexpected changes
+stop rather than silently restart. Do not run two Gemma runtimes writing to this same Drive folder concurrently.
+
+The final button creates an additional local ZIP including partial preparation, logs, response texts and training
+checkpoints; model downloads/cache, token and temporary merged models are excluded. Phi remains local-only and
+still needs manual ZIP downloads before its runtime is destroyed. No Secrets or rclone is used.
 
 Completed bucket/base-evaluation stages are reused. An interrupted stage may restart. Anchor selection saves
 each 128-candidate batch; if the first 800 candidates are insufficient it checks the remaining pre-frozen bank.

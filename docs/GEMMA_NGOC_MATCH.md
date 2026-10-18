@@ -16,7 +16,7 @@ Six original scripts retain their source text (LF line endings): common, constra
 |---|---|
 | Train / test | Original frozen 2,000 NuminaMath-1.5 Olympiad / 2,000 Omni-MATH numeric question-answer pairs |
 | Seeds / arms | 1, 2, 3; monitor, NAFC, fixed replay, KL, FlipGuard |
-| Training | 300 steps; 8 prompts x 8 responses; micro-batch 1 x accumulation 64; Dr. GRPO |
+| Training | 300 steps; 8 prompts x 8 responses; micro-batch 2 x accumulation 32; Dr. GRPO |
 | Response cap | 1,536 throughout; no extra long-cap run |
 | PI | B=358; eta=0.05; kp=4; lambda max=3, signed |
 | LoRA | r32; alpha 64; dropout 0; all linear layers |
@@ -51,7 +51,7 @@ Those responses use a 2,048-token cap, Hugging Face generation and the old data 
 
 ## Notebook behavior
 
-Fill the token cell, select A100 and Run all. A fresh run needs no file upload. A later output ZIP from this new notebook can be restored by enabling `RESTORE_MATCHED_OUTPUT`; old protocol ZIPs are rejected. The final download button also works after an interrupted command once setup has completed.
+Fill the token cell, select A100, authorize the running account's Google Drive and Run all. A genuinely fresh run needs no file upload; the current restart restores the saved preparation ZIP. A later output ZIP from this new notebook can be restored by enabling `RESTORE_MATCHED_OUTPUT`; old protocol ZIPs are rejected. The final download button also works after an interrupted command once setup has completed.
 
 Bucket and base-evaluation scripts save completed stages, so an interrupted stage may restart. Anchor selection now saves every 128-candidate batch. Training resumes only from a complete model/optimizer/scheduler/RNG/PI/NAFC checkpoint. No fallback to CPU, smaller counts or shorter evaluation is automatic.
 
@@ -120,8 +120,8 @@ For an existing runtime, run the uninstall and CPU check in a new cell, then ret
 ## A100 backward-memory recovery (18 October 2026)
 
 Gemma's monitor arm ran 17/300 steps, then failed in backward: a 6 GiB allocation could not fit the remaining
-3.61 GiB on an A100-40GB. This was an OOM, not a stalled process. All arms now use micro-batch 1 with 64
-accumulation steps instead of micro-batch 4 with 16. Both retain 8 prompts x 8 responses per optimizer step,
+3.61 GiB on an A100-40GB. This was an OOM, not a stalled process. The first recovery used micro-batch 1 with 64
+accumulation steps instead of micro-batch 4 with 16, before the later micro-batch-2 restart described below. Both retain 8 prompts x 8 responses per optimizer step,
 1,536 completion tokens, BF16, the same optimizer and the same PI/NAFC settings. Float summation order and
 NLL anchor rotation per micro-batch can differ; this is a documented hardware adaptation, not bitwise replication.
 Phi inherits the same physical batching. No allocator tweak, shorter questions, smaller response budget,
@@ -134,3 +134,27 @@ log proves an OOM or the earlier processor initialization error. Existing prepar
 The observed failure preceded checkpoint-25, so step 17 cannot be resumed; that arm restarts from the base.
 New notebooks accept old preparation-only ZIPs, but reject training-containing ZIPs from a different micro-batch.
 This CPU-checked change still needs GPU validation; it does not guarantee every subsequent arm fits 40GB.
+
+
+## Persistent Gemma restart (18 October 2026)
+
+After the local-only Colab runtime disappeared, the only verified ZIP on the user's machine contained complete
+preparation and 128 anchors, with no training checkpoint. The monitor/NAFC training state was not recoverable
+from notebook logs. The user requested a faster restart and explicitly authorized automatic storage in the
+running Colab account's Google Drive.
+
+Gemma now uses micro-batch 2 with 32 accumulation steps, retaining 64 sampled responses per optimizer step.
+The original micro-batch 4 OOM and the lower-memory micro-batch 1 observation do not prove that 2 fits every
+future KL/FlipGuard batch; this setting still requires real A100 validation. Phi stays at micro-batch 1.
+Micro-batch 3 is not used because it does not divide the declared 64-response effective batch.
+
+The notebook mounts Drive and keeps experiment code, preparation, checkpoints, logs and evaluation results at
+MyDrive/NAFC_Gemma_Olympiad_micro2. Model downloads, Hugging Face cache and temporary merged models remain
+local under /content. Full checkpoints are still saved every 25 steps. This permits recovery across runtime
+replacements, up to the latest complete persisted checkpoint; unsaved steps and interrupted saves can still be
+lost. A new VM must mount the same Drive and use the same pinned notebook/environment. Existing experiment
+identity prevents restoring an older ZIP over persisted progress. Free Drive quota and working Drive I/O are
+required. No Drive integration was added to Phi.
+
+The batch change reuses preparation-only ZIPs with exact known model/data/source identities. It does not mix
+previously trained micro-batch-1 or -4 checkpoints into the new micro-batch-2 experiment.

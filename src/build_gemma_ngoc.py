@@ -17,6 +17,7 @@ def build(profile='gemma'):
         if hashlib.sha256(bodies[name]).hexdigest() != expected:
             raise ValueError('Pinned source changed: '+name)
     if profile == 'phi':
+        plan['micro_batch'] = 1
         plan['model'] = 'microsoft/Phi-4-mini-instruct'
         plan['model_revision'] = 'cfbefacb99257ffa30c83adab238a50856ac3083'
         bodies['matched_run.py'] = bodies['matched_run.py'].decode('utf-8').replace('gemma', 'phi').replace('Gemma', 'Phi').encode('utf-8')
@@ -56,7 +57,7 @@ Omni-MATH evaluation. Ngoc's MATH questions are not used.
 | Response cap | 1,536 tokens throughout; no longer-cap test |
 | PI | Budget 358; eta 0.05; kp 4; signed lambda in [-3, 3] |
 | Training | TRL 1.13 + vLLM 0.19.1; BF16; 300 steps; 8 prompts x 8 generations |
-| LoRA / optimizer | r32 all linear layers; lr 1e-5; 10 warmup steps; micro-batch 1, accumulation 64 |
+| LoRA / optimizer | r32 all linear layers; lr 1e-5; 10 warmup steps; micro-batch 2, accumulation 32 |
 | Anchors | Initial pool 800; extend to the pre-frozen 2,048 if insufficient; choose 128 at >=6/8 |
 | Split / audit | 64 repair + 64 held, split seed 0; 4 draws every 25 steps |
 | Controls | KL beta 0.04; FlipGuard gamma 0.1; fixed replay gamma 0.5, max fraction 0.5 |
@@ -64,7 +65,7 @@ Omni-MATH evaluation. Ngoc's MATH questions are not used.
 | Base reference | 8 draws, then independent 4-draw noise check, at 1,536 tokens only |
 
 The frozen train/test partitions are preserved from the Olympic experiment, not replaced with Ngoc's MATH split.
-After an observed A100-40GB backward OOM at micro-batch 4, all arms use micro-batch 1 and 64 accumulation steps.
+After an observed A100-40GB backward OOM at micro-batch 4, Gemma restarts with micro-batch 2 and 32 accumulation steps.
 The effective batch remains 8 prompts x 8 responses = 64; physical batching differs from Ngoc's run.
 Floating-point accumulation order and per-micro anchor rotation can differ; bitwise equivalence is not claimed.
 The initial anchor pool is the first 800 candidates in the already frozen Numina candidate order. If it cannot
@@ -86,7 +87,9 @@ This new run must prepare Gemma-specific references and anchors with the upstrea
 Select **A100**, fill the Hugging Face token below, then **Run all**. The notebook needs no repository or ZIP input
 for a fresh run. Preparation includes upstream train-bucket sampling (2,000 x 8 responses) as well as test-reference
 sampling (2,000 x [8 + 4]); these are shared by all 15 runs. No measured CU or single-session completion guarantee.
-At the end, click **Download all output (.zip)**. Until downloaded, output exists only in the runtime.
+Gemma saves preparation, checkpoints, results and logs directly in the running account's Google Drive.
+Grant Drive access once. Model weights/cache and temporary merged models remain in /content.
+At the end, **Download all output (.zip)** provides an additional local copy. Drive writes can add I/O overhead.
 '''), md('## 1. Access and optional resume'), code('''import os
 HF_TOKEN = "" # @param {type:"string"}
 RESTORE_MATCHED_OUTPUT = False # @param {type:"boolean"}
@@ -142,7 +145,7 @@ exporter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(exporter)
 PLAN = exporter.check_sources()
 exporter.check_process_cleanup()
-if RESTORE_MATCHED_OUTPUT:
+if RESTORE_MATCHED_OUTPUT and not (ROOT/"experiment_identity.json").exists():
     uploads = files.upload()
     if len(uploads) != 1:
         raise ValueError("Select one latest output ZIP from this Ngoc-matched Gemma notebook.")
@@ -151,6 +154,8 @@ if RESTORE_MATCHED_OUTPUT:
     archive.write_bytes(data)
     exporter.restore(archive)
     del uploads, data
+elif RESTORE_MATCHED_OUTPUT:
+    print("Existing experiment found; keeping its saved progress instead of restoring an older ZIP.")
 
 def command(*args):
     print("Starting:", *args, flush=True)
@@ -207,7 +212,20 @@ button.on_click(download_output)
 display(button, status)
 ''')]
     name = '01_Gemma_Olympiad_3Seeds.ipynb'
-    if profile == 'phi':
+    if profile == 'gemma':
+        drive_root = '/content/drive/MyDrive/NAFC_Gemma_Olympiad_micro2'
+        cells[2].source += '''from google.colab import drive
+drive.mount("/content/drive")
+'''
+        for cell in cells:
+            if cell.cell_type == 'code':
+                if cell.source.startswith('%%writefile'):
+                    header, body = cell.source.split('\n', 1)
+                    cell.source = header.replace('/content/gemma_ngoc/', drive_root+'/')+'\n'+body
+                else:
+                    cell.source = cell.source.replace('/content/gemma_ngoc', drive_root)
+        cells[1].source = '## 1. Hugging Face access, Drive backup and optional ZIP restore'
+    else:
         name = '02_Phi_Olympiad_3Seeds_Resume.ipynb'
         for cell in cells:
             if cell.cell_type == 'code' and cell.source.startswith('%%writefile'):
@@ -215,6 +233,14 @@ display(button, status)
                 cell.source = header.replace('/gemma_ngoc/', '/phi_ngoc/')+'\n'+body
             else:
                 cell.source = cell.source.replace('Gemma 3-1B-IT', 'Phi-4-mini-instruct').replace('Gemma', 'Phi').replace('gemma', 'phi')
+        cells[0].source = cells[0].source.replace(
+            'micro-batch 2, accumulation 32', 'micro-batch 1, accumulation 64').replace(
+            'Phi restarts with micro-batch 2 and 32 accumulation steps.', 'Phi keeps micro-batch 1 and 64 accumulation steps.')
+        cells[0].source = cells[0].source.replace(
+            "Phi saves preparation, checkpoints, results and logs directly in the running account's Google Drive.\n"
+            'Grant Drive access once. Model weights/cache and temporary merged models remain in /content.\n'
+            'At the end, **Download all output (.zip)** provides an additional local copy. Drive writes can add I/O overhead.',
+            'At the end, click **Download all output (.zip)**. Until downloaded, output exists only in the runtime.')
         cells[0].source = cells[0].source.replace(
             'Select **A100**, fill the Hugging Face token below, then **Run all**.',
             'Select **A100**, then **Run all**. Phi is public; no token or login is required.')

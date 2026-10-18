@@ -46,7 +46,8 @@ def test_phi_matches_gemma_protocol_and_reuses_only_question_lists(phi):
     gemma = json.loads((PROJECT/'src/gemma_ngoc/plan.json').read_text(encoding='utf-8'))
     assert plan['model'] == 'microsoft/Phi-4-mini-instruct'
     assert plan['model_revision'] == 'cfbefacb99257ffa30c83adab238a50856ac3083'
-    runtime_fields = ('model','model_revision','source_sha256','source_line_endings','vllm_training_context')
+    runtime_fields = ('model','model_revision','source_sha256','source_line_endings','vllm_training_context','micro_batch')
+    assert plan['micro_batch'] == 1 and gemma['micro_batch'] == 2
     assert {k:v for k,v in plan.items() if k not in runtime_fields} == {
         k:v for k,v in gemma.items() if k not in runtime_fields}
     for name, digest in plan['source_sha256'].items():
@@ -178,4 +179,6 @@ def test_phi_training_flags_preserve_gemma_config(phi, arm):
         index = args.index(key)+1
         assert 'phi_ngoc_model' in args[index] if key == '--model' else args[index].endswith(runner.run_name(arm, 1))
         args[index] = reference[index]
+    assert args[args.index('--micro_batch')+1] == '1'
+    args[args.index('--micro_batch')+1] = reference[reference.index('--micro_batch')+1]
     assert args == reference

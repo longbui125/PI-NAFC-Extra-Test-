@@ -31,7 +31,7 @@ def test_oom_recovery_reuses_preparation_and_archives_only_unsaved_scratch(micro
     (m.ROOT/'logs').mkdir()
     (m.ROOT/'logs/train_lacPImonH_s1.log').write_text('torch.OutOfMemoryError: CUDA out of memory')
     runner = m.install('a'*40)
-    assert runner.check_sources()['micro_batch'] == 1
+    assert runner.check_sources()['micro_batch'] == 2
     assert not folder.exists()
     assert len(list((m.ROOT/'results/failed_runs').glob('*/events.log'))) == 1
     for name,data in saved.items():
@@ -59,7 +59,7 @@ def test_only_known_memory_plan_is_compatible():
     assert runner.same_experiment(old,current)
     assert not runner.same_experiment({**old,'learning_rate':2e-5},current)
     assert not runner.same_experiment({**old,'micro_batch':2},current)
-    assert current['micro_batch'] == 1
+    assert current['micro_batch'] == 2
     assert current['prompts_per_step']*current['num_generations'] == 64
 
 
@@ -78,3 +78,4 @@ def test_accumulation_preserves_effective_batch_gradient_and_penalty_weight():
             ((task+.5*penalty)/accumulation).backward()
         return torch.cat([p.grad.flatten() for p in model.parameters()])
     assert torch.allclose(gradient(4),gradient(1),rtol=1e-12,atol=1e-12)
+    assert torch.allclose(gradient(4),gradient(2),rtol=1e-12,atol=1e-12)
