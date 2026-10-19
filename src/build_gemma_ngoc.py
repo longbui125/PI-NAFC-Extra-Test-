@@ -7,7 +7,7 @@ import nbformat as nb
 ROOT = Path(__file__).resolve().parent
 
 
-def build(profile='gemma'):
+def build(profile='gemma', *, write=True):
     if profile not in ('gemma', 'phi'):
         raise ValueError('Choose gemma or phi.')
     source = ROOT/'gemma_ngoc'
@@ -275,6 +275,8 @@ os.environ["HF_HOME"] = "/content/hf_cache"
         'nafc': {'profile': profile+'_ngoc_matched', 'upstream_commit': plan['upstream_commit'],
                  'seeds': plan['seeds'], 'historical_output_reused': False}})
     nb.validate(book)
+    if not write:
+        return book
     target = ROOT.parent/'notebooks'/name
     nb.write(book, target)
     return target

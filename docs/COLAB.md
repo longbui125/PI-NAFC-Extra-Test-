@@ -2,8 +2,35 @@
 
 - [Gemma / Olympic mathematics](../notebooks/01_Gemma_Olympiad_3Seeds.ipynb)
 - [Phi-4-mini-instruct / Olympic mathematics](../notebooks/02_Phi_Olympiad_3Seeds_Resume.ipynb)
+- [Gemma / Olympic mathematics — PI budget 756, seed 1 only](../notebooks/03_Gemma_Olympiad_B756_Seed1.ipynb)
 
-Both standalone notebooks use Ngoc's PI protocol from DATN-FPTU commit `786291e`: five arms, seeds 1/2/3,
+## Seed-1 budget follow-up
+
+Notebook 03 is a separate exploratory experiment: the same five arms, seed 1 only, 300 steps, with the training
+PI budget changed from 358 to 756. NAFC, fixed replay, KL and FlipGuard settings remain unchanged. All arms start
+from the public Gemma base model; no B358 trained adapter, optimizer or controller state is reused.
+The budget was chosen after inspecting the B358 results, using roughly the same budget/base-train-length ratio
+as the original Qwen experiment. It does not guarantee NAFC superiority and must not be pooled with B358 seeds.
+
+Use A100, fill the Hugging Face token, authorize the same Drive and Run all. Leave optional ZIP restore off.
+The notebook reads completed preparation from `MyDrive/NAFC_Gemma_Olympiad_micro2`. It checks the original plan,
+software versions, frozen question order and model before copying existing B440 train/test samples, anchors and
+the independent base evaluation. A CPU-only metadata conversion creates the B756 train file with identical
+questions, samples and difficulty groups. Missing/incompatible preparation stops instead of triggering generation.
+Test grouping, noise measurement and reference token-budget metrics remain shared with the original experiment.
+
+New checkpoints/results/logs go to `MyDrive/NAFC_Gemma_Olympiad_B756_seed1`. After a VM replacement Run all with
+the same Drive: preparation is verified, completed new arms skipped, and partial new arms resume their latest
+complete new checkpoint. Only B756 ZIPs can restore into this new folder. Original outputs are never overwritten.
+
+Cell 2 checks A100 before installation and skips pip if all versions match. On a genuinely fresh VM the heavy
+Torch/vLLM downloads remain necessary. math-verify and datasets match the resolved original preparation versions.
+Setup prints progress every 30 seconds and saves `logs/runtime_setup.log`. It requests no manual kernel restart;
+it cannot prevent Colab from disconnecting, replacing a VM or imposing resource limits.
+
+`python src/build_budget756.py` rebuilds only notebook 03 without modifying the two original notebooks.
+
+The two original notebooks use Ngoc's PI protocol from DATN-FPTU commit `786291e`: five arms, seeds 1/2/3,
 300 steps, BF16, LoRA r32, PI budget 358 and one 1,536-token response cap. The five arms are PI monitor,
 PI + NAFC, fixed replay, KL and FlipGuard. Each model runs 15 training jobs sequentially.
 After the A100-40GB OOM and the user's request to speed up the restart, Gemma uses micro-batch 2 x accumulation
@@ -70,7 +97,7 @@ alone cannot resume optimizer state. The supervisor stops a command after 15 min
 
 ## Build and checks
 
-`python src/build_colab.py` rebuilds both notebooks from the shared matched sources in `src/gemma_ngoc/`.
+`python src/build_colab.py` rebuilds all three notebooks from the shared matched sources in `src/gemma_ngoc/`.
 Phi changes the pinned model, runtime/model-folder names and the measured prompt-based vLLM context.
 Training algorithms, controllers, evaluation scripts and frozen question bytes remain shared. The builder computes and embeds the resulting source fingerprints.
 Legacy engine sources and saved ZIPs remain available for provenance, but are not used by the updated notebooks.
