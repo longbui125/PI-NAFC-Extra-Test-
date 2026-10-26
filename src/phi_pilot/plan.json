@@ -1,0 +1,107 @@
+{
+  "protocol": "phi_olympic_three_seeds_v2",
+  "model": "microsoft/Phi-4-mini-instruct",
+  "revision": "cfbefacb99257ffa30c83adab238a50856ac3083",
+  "steps": 300,
+  "max_tokens": 1536,
+  "train_count": 2000,
+  "validation_count": 256,
+  "test_count": 2000,
+  "anchor_candidates": 2048,
+  "anchor_count": 128,
+  "selection_minimum": 800,
+  "anchor_select_draws": 8,
+  "anchor_check_draws": 4,
+  "anchor_split": 0.5,
+  "split_seed": 0,
+  "audit_every": 25,
+  "nafc_eta": 10.0,
+  "nafc_lambda_max": 1.0,
+  "noise_margin": 0.02,
+  "arms": [
+    "mon",
+    "rep",
+    "quota",
+    "kl"
+  ],
+  "pi_budget_rule": "Fixed at the completed seed-1 validation calibration: 400.86 tokens",
+  "pi_eta": 0.05,
+  "pi_kp": 4.0,
+  "pi_lambda_max": 3.0,
+  "micro_batch": 1,
+  "effective_responses": 64,
+  "prompts_per_step": 8,
+  "num_generations": 8,
+  "learning_rate": 1e-05,
+  "lora_rank": 32,
+  "replay_frac_max": 0.5,
+  "save_steps": 25,
+  "keep_steps": [
+    50,
+    100,
+    150,
+    200,
+    250,
+    300
+  ],
+  "intermediate_evaluation": "256 validation questions at 50/100/150/200/250, 4 draws; no step selection",
+  "primary_evaluation": "2000 same-source Numina Olympic questions at final step 300, 4 draws",
+  "readiness": {
+    "min_validation_accuracy": 0.1,
+    "min_mixed_group_fraction": 0.05,
+    "max_capped_fraction": 0.25,
+    "purpose": "resource/capability screen, not evidence of NAFC effectiveness"
+  },
+  "upstream_commit": "786291e",
+  "upstream_sha256": {
+    "common.py": "a4950e6ca79368f1f741ccc3c3c918272754c80751afd59452764a97badf68b3",
+    "constraints.py": "b6faa0ad66e063e06603aa75e9780f67c4518edbba7a24f8723dc39fdc65bc43",
+    "flipcon.py": "6658769eef936200f557272948e3c7d3c7bf7171907be9bd4d04669195a54875",
+    "train.py": "af3b33a2bab24ebb78205fbb71228cd3d4be919d8562144321fad18b55f59a35",
+    "fixflip.py": "51ba99e80c1316133804a5b076c6b1da6b3be06f18c2ce6accaae1b85500abb6",
+    "prepare_buckets.py": "1b4c77d644b84598ddbaa8b41a6ea5ad5ba4ec3d37c1f7f414409aee5b601168",
+    "build_anchors.py": "53b5174fc257dcd0452ae57a2ad68131ba5ffc4b074a989f63da516f75c3b572"
+  },
+  "versions": {
+    "torch": "2.10.0+cu128",
+    "vllm": "0.19.1",
+    "trl": "1.13.0",
+    "transformers": "5.18.0",
+    "peft": "0.21.1",
+    "math-verify": "0.9.0",
+    "datasets": "4.8.5"
+  },
+  "changes_to_upstream": [
+    "Explicit historical total context (1538 tokens)",
+    "Bounded answer verification",
+    "Observations and complete resume state; unchanged NAFC formulas",
+    "Matched-quota replay diagnostic",
+    "CPU merge in a separate process",
+    "Shared preparation, independent seeds 1/2/3 and KL beta 0.04"
+  ],
+  "provenance": {
+    "dataset": "AI-MO/NuminaMath-1.5",
+    "revision": "1b05109f9e5c1ad06c0663519502416c30b300f8",
+    "sources": [
+      "olympiads",
+      "olympiads_ref"
+    ],
+    "seed": 20261023,
+    "train_reused": 2000,
+    "anchor_candidates_reused": 2028,
+    "anchor_candidates_replaced_for_near_overlap": 20,
+    "numeric_eligible": 46292,
+    "filter": "math-word-problem; both validity labels Yes; finite numeric gold",
+    "near_dedup": "Jaccard >= .85 on 12-character normalized shingles; no semantic-paraphrase guarantee",
+    "reuse_sha256": "6fe942bdfda17453163799bc4d4ec9d671d3b37adc4a5800bd41f05d8adbd263"
+  },
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "pi_budget_tokens": 400.86,
+  "context_tokens": 1538,
+  "preparation_seed": 0,
+  "kl_beta": 0.04
+}

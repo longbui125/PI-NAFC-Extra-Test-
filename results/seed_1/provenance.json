@@ -1,0 +1,14 @@
+{
+  "status": "Completed historical seed 1; not re-executed during repository cleanup",
+  "pi_budget_tokens": 400.86,
+  "steps": 300,
+  "test_questions": 2000,
+  "draws": 4,
+  "sources_sha256": {
+    "reference": "8a24babd81ba861e70714c6364d62e11cc2ae1788c7b13139010ea742b5e8257",
+    "mon": "f73844c7f8a20d6b8e0e9d78b392ea93ad597e28a275447293911b82678a7ee9",
+    "rep": "7d6710a1baaf36d905e35df7cd6973e2d0ff91d85106dc97eaa5ebf91226685f",
+    "quota": "b4eb63fcf984beffbbb28c84e05d8e7c6dc6c68c05ec798307745b685afe469a",
+    "kl": "ace6f9ff599b5dc5debd2bf02c189ad24dde2e441f53346c7ff58a515eba2cae"
+  }
+}

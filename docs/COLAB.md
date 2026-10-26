@@ -1,106 +1,70 @@
-# Colab notebooks
+# Chạy Phi–Olympiad trên Colab
 
-- [Gemma / Olympic mathematics](../notebooks/01_Gemma_Olympiad_3Seeds.ipynb)
-- [Phi-4-mini-instruct / Olympic mathematics](../notebooks/02_Phi_Olympiad_3Seeds_Resume.ipynb)
-- [Gemma / Olympic mathematics — PI budget 756, seed 1 only](../notebooks/03_Gemma_Olympiad_B756_Seed1.ipynb)
+1. Upload `notebooks/01_Phi_Olympiad_3Seeds.ipynb` lên Colab.
+2. Chọn A100 trong phần loại môi trường thời gian chạy.
+3. Token Hugging Face ở đầu notebook là tùy chọn; không cần Secrets.
+4. Chọn Run all và đồng ý quyền Drive tại bước 2.
+5. Theo dõi số câu đã lưu ở bước chuẩn bị và số bước train tại từng seed/nhánh.
+6. Xem báo cáo trên Drive hoặc bấm **Download output ZIP** ở cuối notebook.
 
-## Seed-1 budget follow-up
+Notebook nhúng đầy đủ câu hỏi, mã và cấu hình. Mọi câu trả lời tham chiếu, anchor,
+calibration và model train được tạo từ đầu; không lấy model đã train của seed khác.
+Danh sách train/validation/test giữ nguyên thứ tự của thí nghiệm seed 1.
 
-Notebook 03 is a separate exploratory experiment: the same five arms, seed 1 only, 300 steps, with the training
-PI budget changed from 358 to 756. NAFC, fixed replay, KL and FlipGuard settings remain unchanged. All arms start
-from the public Gemma base model; no B358 trained adapter, optimizer or controller state is reused.
-The budget was chosen after inspecting the B358 results, using roughly the same budget/base-train-length ratio
-as the original Qwen experiment. It does not guarantee NAFC superiority and must not be pooled with B358 seeds.
+## Output trên Drive
 
-Use A100, fill the Hugging Face token, authorize the same Drive and Run all. Leave optional ZIP restore off.
-The notebook reads completed preparation from `MyDrive/NAFC_Gemma_Olympiad_micro2`. It checks the original plan,
-software versions, frozen question order and model before copying existing B440 train/test samples, anchors and
-the independent base evaluation. A CPU-only metadata conversion creates the B756 train file with identical
-questions, samples and difficulty groups. Missing/incompatible preparation stops instead of triggering generation.
-Test grouping, noise measurement and reference token-budget metrics remain shared with the original experiment.
+```text
+NAFC_Phi_Olympic_3Seeds_v2/
+  identity.json, plan.json, questions.json, context.json
+  source/                         Mã và manifest dùng cho run này
+  logs/                           Log cài đặt, chuẩn bị và lần gọi đầu từng seed
+  samples/                        Lô đáp án tham chiếu đã lưu
+  anchors.json, buckets_*.json     Anchor và calibration chung
+  readiness.json                  Chẩn đoán trước train
+  results/base_*.json              Lần chấm lại model gốc để đo nhiễu
+  smoke/                          Lượt thử 2 bước, không dùng làm model chính
+  seed_1/                         Tương tự cho seed_2/ và seed_3/
+    identity.json, plan.json       Seed và hash dữ liệu chung
+    runs/mon/, rep/, quota/, kl/   Checkpoint và trace riêng từng nhánh
+    samples/                      Đáp án đánh giá
+    results/                      Điểm từng câu, từng mốc
+    logs/
+    summary.csv, summary.json, REPORT.md
+  aggregate.csv, aggregate.json   Chỉ tạo khi đủ cả ba seed
+```
 
-New checkpoints/results/logs go to `MyDrive/NAFC_Gemma_Olympiad_B756_seed1`. After a VM replacement Run all with
-the same Drive: preparation is verified, completed new arms skipped, and partial new arms resume their latest
-complete new checkpoint. Only B756 ZIPs can restore into this new folder. Original outputs are never overwritten.
+## Checkpoint và gián đoạn
 
-Cell 2 checks A100 before installation and skips pip if all versions match. On a genuinely fresh VM the heavy
-Torch/vLLM downloads remain necessary. math-verify and datasets match the resolved original preparation versions.
-Setup prints progress every 30 seconds and saves `logs/runtime_setup.log`. It requests no manual kernel restart;
-it cannot prevent Colab from disconnecting, replacing a VM or imposing resource limits.
+Checkpoint đầy đủ được ghi mỗi 25 bước, giữ ba bản gần nhất. Các adapter đánh giá
+ở bước 50/100/150/200/250/300 được giữ riêng. Chỉ checkpoint có `COMPLETE.json`
+và đầy đủ các file có kích thước khớp mới được nạp lại. Không sử dụng bản thiếu;
+nếu không còn bản hợp lệ, chương trình dừng để tránh vô tình train lại từ đầu.
 
-`python src/build_budget756.py` rebuilds only notebook 03 without modifying the two original notebooks.
+Sau gián đoạn, kết nối lại A100 và Run all cùng notebook trên cùng Drive.
+Các lô dữ liệu đã ghi và nhánh đã hoàn tất sẽ được dùng lại. Không xóa thư mục
+trên Drive, không chạy hai notebook cùng lúc vào cùng thư mục output.
+Đây là cấu trúc mới; không trỏ nó vào thư mục checkpoint của notebook phiên bản cũ.
 
-The two original notebooks use Ngoc's PI protocol from DATN-FPTU commit `786291e`: five arms, seeds 1/2/3,
-300 steps, BF16, LoRA r32, PI budget 358 and one 1,536-token response cap. The five arms are PI monitor,
-PI + NAFC, fixed replay, KL and FlipGuard. Each model runs 15 training jobs sequentially.
-After the A100-40GB OOM and the user's request to speed up the restart, Gemma uses micro-batch 2 x accumulation
-32; Phi stays at 1 x 64. Both retain the effective 8 x 8 response batch. Physical batching differs from Ngoc's
-4 x 16; numerical and anchor-rotation order can differ. Micro-batch 2 still needs real-GPU memory validation.
+Bộ giám sát dùng file log thường, không đợi EOF của worker còn sống sau khi tiến trình
+chính thoát. Mỗi lệnh có timeout, heartbeat 30 giây và giới hạn 15 phút không có output;
+train còn kiểm tra bước tối ưu có tăng hay không. Colab vẫn có thể ngắt hoặc thu hồi VM.
+Chạy lại checkpoint không cam kết sinh đáp án giống từng bit với một phiên không ngắt.
 
-The same frozen 2,000 NuminaMath Olympic training questions, 2,000 numeric Omni-MATH test questions and
-2,048 disjoint anchor candidates are embedded. These are question lists, not model predictions. No ZIP upload
-or repository checkout is needed for a fresh run. See [protocol details](GEMMA_NGOC_MATCH.md).
+## Cấu hình và nguồn
 
-## Run
+`src/phi_pilot/plan.json` ghi model revision, dataset revision, các hash mã nguồn
+và phiên bản thư viện. Bộ điều khiển PI và NAFC kế thừa mã tại commit `786291e`
+của DATN-FPTU; giữ nguyên công thức. Runtime thêm ghi trace, lưu trạng thái replay,
+quota đối chiếu, chia seed và gộp adapter trên CPU trong tiến trình riêng.
 
-Import the corresponding notebook into Colab and select A100. For Gemma, accept its Hugging Face license
-and fill the first token cell. Gemma also requests permission to mount the running account's Google Drive.
-For the current Gemma restart, enable `RESTORE_MATCHED_OUTPUT` and upload the saved matched preparation-only ZIP
-when prompted; it contains 128 anchors and complete train/test/base preparation, but no trained checkpoints.
-Phi is public and needs no token. Leave `RESTORE_MATCHED_OUTPUT=False` for a genuinely fresh run, then Run all. Setup removes unused torchao and tests a tiny CPU LoRA forward/backward pass.
-Both notebooks include the text-tokenizer and process-supervision fixes. Each notebook is independent.
+Ngân sách PI **400,86 token** được giữ từ calibration validation của seed 1.
+Chuẩn bị mới vẫn sinh tham chiếu và hiệu chỉnh lambda khởi tạo, không tìm ngân sách
+bằng kết quả test. Ngân sách PI là mục tiêu mềm, không bảo đảm mọi nhánh có cùng độ dài.
 
-Phi model revision is `cfbefacb99257ffa30c83adab238a50856ac3083`. Its pinned config declares Phi3ForCausalLM,
-bfloat16 weights and no quantization. Optimizer, loss and sampling flags match Gemma. Phi additionally sets vLLM's training context to the longest
-actual task/anchor prompt plus 1,536 completion tokens, rather than the native 131,072-token window. Prompts
-are not truncated, and the 1,536-token response cap is unchanged. Architecture and tokenizer differ.
-No A100 training run, peak VRAM or CU consumption has been measured for the updated Phi notebook.
+Để tái hiện cấu hình thực tế seed 1, tổng context được khai báo rõ là **1.538 token**.
+Completion cap là **1.536 token**, nhưng phần còn lại sau đề bài có thể thấp hơn.
+Độ dài đề được đếm từ token IDs, không dùng số trường của đối tượng tokenizer.
 
-## What can be reused
-
-Only the question lists, answers and split boundaries are shared between models. Each model must generate its
-own bucket samples and difficulty groups, base evaluations, anchors, reference responses/token IDs and noise floor.
-A Gemma output ZIP cannot resume Phi, and the notebook rejects it before importing results. The previous Phi
-4,096-token experiment also cannot resume the new 1,536-token protocol. Historical ZIPs remain in snapshots.
-Neither model reuses the other's adapters, checkpoints, scores or learned controller state.
-
-The optional restore switch accepts only a compatible output ZIP from the same matched model notebook.
-Previous micro-batch-1/4 preparation-only ZIPs remain valid for Gemma. Training state is not mixed across batching
-configurations. The OOM recovery installer can preserve scratch metadata and restart a failed uncheckpointed arm.
-The current filename still contains `Resume`, but a fresh Phi run does not embed or resume historical preparation.
-
-## Output and interruptions
-
-Gemma writes experiment sources, preparation, checkpoints, evaluation results and logs directly under
-`/content/drive/MyDrive/NAFC_Gemma_Olympiad_micro2`. This is My Drive of the account authorized in the running
-Colab, not an externally shared folder. It needs sufficient free Drive storage. Model downloads stay under
-`/content/gemma_ngoc_model`, the Hugging Face cache under `/content/hf_cache`, and temporary merged models
-under `/content/merged`; they are redownloaded/rebuilt after a VM replacement and are not backed up to Drive.
-Direct Drive writes can add I/O overhead, especially at checkpoint saves.
-
-After a VM replacement, reopen this same notebook, provide the token, authorize the same Drive and Run all.
-Existing Drive preparation/results are kept; an old ZIP is not imported over existing experiment identity.
-The training loop skips completed jobs and resumes from the latest complete checkpoint. If the VM dies while
-saving a checkpoint, the runner skips incomplete checkpoints and tries earlier complete ones. It cannot recover
-steps since the last valid save. Pinned software/GPU and experiment identity still must match; unexpected changes
-stop rather than silently restart. Do not run two Gemma runtimes writing to this same Drive folder concurrently.
-
-The final button creates an additional local ZIP including partial preparation, logs, response texts and training
-checkpoints; model downloads/cache, token and temporary merged models are excluded. Phi remains local-only and
-still needs manual ZIP downloads before its runtime is destroyed. No Secrets or rclone is used.
-
-Completed bucket/base-evaluation stages are reused. An interrupted stage may restart. Anchor selection saves
-each 128-candidate batch; if the first 800 candidates are insufficient it checks the remaining pre-frozen bank.
-The target remains 128 anchors with at least 6/8 correct. Insufficient eligible anchors stop training without
-lowering the target or changing test data. Training checkpoints are saved every 25 steps; milestone adapters
-alone cannot resume optimizer state. The supervisor stops a command after 15 minutes without new output.
-
-## Build and checks
-
-`python src/build_colab.py` rebuilds all three notebooks from the shared matched sources in `src/gemma_ngoc/`.
-Phi changes the pinned model, runtime/model-folder names and the measured prompt-based vLLM context.
-Training algorithms, controllers, evaluation scripts and frozen question bytes remain shared. The builder computes and embeds the resulting source fingerprints.
-Legacy engine sources and saved ZIPs remain available for provenance, but are not used by the updated notebooks.
-
-Run CPU checks with `python -m pytest tests -q`. Successful CPU checks do not establish GPU memory fit,
-completion time, an affordable CU budget or NAFC superiority.
+Kết quả `results/seed_1/` trong repo là số đo đã có trước đợt dọn mã này.
+Notebook mới không tự nhận những checkpoint cũ là kết quả của một lần chạy mới.
+KL và quota là các đối chứng bổ sung; không coi chúng là những giả thuyết chưa từng xem dữ liệu.
